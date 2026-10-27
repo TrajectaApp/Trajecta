@@ -1,0 +1,1141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1113">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Trajecta">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}</style>
+</head>
+<body><title>Trajecta</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one-column field instrument. The correction readout dominates the top; inputs sit in grouped
+   panels below; a fixed bottom tab bar switches Solve / Table / Reticle / Rifles. Dark-first for low light,
+   with a high-contrast light palette for bright sun. */
+:root {
+  --bg: #0e1113;
+  --panel: #161a1d;
+  --raise: #1e2327;
+  --line: #2a3035;
+  --fg: #e7eaec;
+  --muted: #8d969d;
+  --accent: #ff9a1f;
+  --accent-ink: #1b1104;
+  --danger: #ff6b5e;
+  --display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --num: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #eef0ee; --panel: #ffffff; --raise: #f4f5f3; --line: #d5d9d5; --fg: #121619; --muted: #5a636a;
+    --accent: #b85700; --accent-ink: #ffffff; --danger: #c0352a; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #eef0ee; --panel: #ffffff; --raise: #f4f5f3; --line: #d5d9d5; --fg: #121619; --muted: #5a636a;
+  --accent: #b85700; --accent-ink: #ffffff; --danger: #c0352a; color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--fg); font: 15px/1.45 var(--body);
+  -webkit-text-size-adjust: 100%;
+}
+.wrap {
+  max-width: 560px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px calc(96px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; gap: 14px;
+}
+header.brand { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+header.brand h1 { margin: 0; font: 700 22px/1 var(--display); letter-spacing: .06em; text-transform: uppercase; }
+header.brand h1 span { color: var(--accent); }
+header.brand small { color: var(--muted); font-size: 12px; }
+
+h2 {
+  margin: 6px 0 0; font: 600 11.5px/1 var(--body); letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+}
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px 14px; }
+.row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px;
+  border-bottom: 1px solid var(--line);
+}
+.row:last-child { border-bottom: 0; }
+.row label, .row .lbl { flex: 1 1 auto; min-width: 0; }
+.row .hint { display: block; color: var(--muted); font-size: 12px; }
+.field { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+input[type="text"], select {
+  font: 500 16px var(--num); color: var(--fg); background: var(--raise); border: 1px solid var(--line);
+  border-radius: 7px; padding: 8px 10px; width: 7.5em; text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+input.wide, select.wide { width: 100%; text-align: left; font-family: var(--body); }
+select { text-align: left; font-family: var(--body); width: auto; max-width: 100%; }
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.unit { color: var(--muted); font-size: 12px; min-width: 2.6em; }
+
+button {
+  font: 600 14px var(--body); color: var(--fg); background: var(--raise); border: 1px solid var(--line);
+  border-radius: 7px; padding: 9px 12px; cursor: pointer; touch-action: manipulation;
+}
+button:active { transform: translateY(1px); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.ghost { background: transparent; }
+button.danger { color: var(--danger); }
+button.pm { width: 40px; padding: 8px 0; font-family: var(--num); }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btns > button { flex: 1 1 0; }
+
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex: 0 0 auto; }
+.seg button { border: 0; border-radius: 0; background: var(--raise); color: var(--muted); padding: 8px 11px; font-size: 13px; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+
+/* Readout */
+.readout { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 10px; }
+.corr { display: grid; grid-template-columns: 4.6em 1fr auto; align-items: baseline; gap: 8px; }
+.corr .dir { font: 700 15px var(--display); letter-spacing: .08em; color: var(--muted); }
+.corr .val { font: 600 40px/1 var(--num); font-variant-numeric: tabular-nums; }
+.corr .val small { font: 500 15px var(--body); color: var(--muted); margin-left: 6px; }
+.corr .clk { font: 500 14px var(--num); color: var(--muted); text-align: right; }
+.corr.elev .val { color: var(--accent); }
+.corr.wind .val { font-size: 30px; }
+.facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; margin: 4px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
+.facts div { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; font-family: var(--num); font-variant-numeric: tabular-nums; text-align: right; }
+.warn { color: var(--danger); }
+.oor { font: 600 20px var(--display); color: var(--danger); }
+
+.stepper { display: grid; grid-template-columns: auto auto 1fr auto auto; gap: 6px; align-items: center; }
+.stepper input { width: 100%; font-size: 28px; text-align: center; padding: 6px; }
+.stepper .rangewrap { position: relative; }
+.stepper .rangewrap span { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 13px; pointer-events: none; }
+
+.note { color: var(--muted); font-size: 12.5px; margin: 0; }
+
+/* Table */
+.tablebox { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font: 13.5px var(--num); font-variant-numeric: tabular-nums; }
+th, td { padding: 7px 9px; text-align: right; white-space: nowrap; }
+th { position: sticky; top: 0; background: var(--raise); color: var(--accent); font: 600 11.5px var(--body); letter-spacing: .06em; text-transform: uppercase; }
+tbody tr:nth-child(even) { background: var(--raise); }
+tr.trans td { color: var(--muted); }
+
+/* Reticle */
+.scope { width: 100%; max-width: 100%; aspect-ratio: 1; display: block; }
+.hold { font: 600 18px var(--num); color: var(--accent); margin: 0; }
+
+/* Rifles */
+.rifle { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 8px; }
+.rifle.sel { border-color: var(--accent); }
+.rifle h3 { margin: 0; font: 600 16px var(--body); display: flex; gap: 8px; align-items: center; }
+.rifle h3 .tag { font: 600 10.5px var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--accent-ink); background: var(--accent); border-radius: 4px; padding: 2px 6px; }
+.rifle p { margin: 0; color: var(--muted); font-size: 13px; font-family: var(--num); }
+
+/* Tab bar */
+nav.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+  background: var(--panel); border-top: 1px solid var(--line);
+  padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+}
+nav.tabs button { background: transparent; border: 0; color: var(--muted); font: 600 13px var(--display); letter-spacing: .08em; text-transform: uppercase; padding: 12px 4px; }
+nav.tabs button[aria-current="page"] { color: var(--accent); box-shadow: inset 0 2px 0 var(--accent); border-radius: 0; }
+
+/* Factory ammo sheet */
+.sheet { position: fixed; inset: 0; z-index: 20; background: rgb(0 0 0 / .55); display: flex; align-items: flex-end; justify-content: center; }
+.sheet .box {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 14px 14px 0 0; width: 100%; max-width: 560px;
+  max-height: 88%; display: flex; flex-direction: column; gap: 10px;
+  padding: 14px max(16px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+.sheet .head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.sheet .head h2 { margin: 0; }
+.sheet .list { overflow-y: auto; display: grid; gap: 6px; -webkit-overflow-scrolling: touch; }
+.load { text-align: left; display: grid; gap: 2px; font-weight: 500; }
+.load span { color: var(--muted); font: 12.5px var(--num); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="brand"><h1>Traj<span>e</span>cta</h1><small id="ver">Ballistic solver</small></header>
+  <main id="main" style="display:flex;flex-direction:column;gap:14px"></main>
+</div>
+<nav class="tabs" aria-label="Sections">
+  <button data-tab="solve">Solve</button>
+  <button data-tab="table">Table</button>
+  <button data-tab="reticle">Reticle</button>
+  <button data-tab="rifles">Rifles</button>
+</nav>
+<div id="sheet"></div>
+
+<script>
+"use strict";
+// ---------- Constants ----------
+const FT = 0.3048, YD = 0.9144, FTLB = 0.737562, MIL_TO_MOA = 3.437747, INCH = 0.0254;
+
+// ---------- Drag tables (Mach, Cd) ----------
+const G1 = [0,.2629,.05,.2558,.1,.2487,.15,.2413,.2,.2344,.25,.2278,.3,.2214,.35,.2155,.4,.2104,.45,.2061,.5,.2032,.55,.202,.6,.2034,.7,.2165,.725,.223,.75,.2313,.775,.2417,.8,.2546,.825,.2706,.85,.2901,.875,.3136,.9,.3415,.925,.3734,.95,.4084,.975,.4448,1,.4805,1.025,.5136,1.05,.5427,1.075,.5677,1.1,.5883,1.125,.6053,1.15,.6191,1.2,.6393,1.25,.6518,1.3,.6589,1.35,.6621,1.4,.6625,1.45,.6607,1.5,.6573,1.55,.6528,1.6,.6474,1.65,.6413,1.7,.6347,1.75,.628,1.8,.621,1.85,.6141,1.9,.6072,1.95,.6003,2,.5934,2.05,.5867,2.1,.5804,2.15,.5743,2.2,.5685,2.25,.563,2.3,.5577,2.35,.5527,2.4,.5481,2.45,.5438,2.5,.5397,2.6,.5325,2.7,.5264,2.8,.5211,2.9,.5168,3,.5133,3.1,.5105,3.2,.5084,3.3,.5067,3.4,.5054,3.5,.504,3.6,.503,3.7,.5022,3.8,.5016,3.9,.501,4,.5006,4.2,.4998,4.4,.4995,4.6,.4992,4.8,.499,5,.4988];
+const G7 = [0,.1198,.05,.1197,.1,.1196,.15,.1194,.2,.1193,.25,.1194,.3,.1194,.35,.1194,.4,.1193,.45,.1193,.5,.1194,.55,.1193,.6,.1194,.65,.1197,.7,.1202,.725,.1207,.75,.1215,.775,.1226,.8,.1242,.825,.1266,.85,.1306,.875,.1368,.9,.1464,.925,.166,.95,.2054,.975,.2993,1,.3803,1.025,.4015,1.05,.4043,1.075,.4034,1.1,.4014,1.125,.3987,1.15,.3955,1.2,.3884,1.25,.381,1.3,.3732,1.35,.3657,1.4,.358,1.5,.344,1.55,.3376,1.6,.3315,1.65,.326,1.7,.3209,1.75,.316,1.8,.3117,1.85,.3078,1.9,.3042,1.95,.301,2,.298,2.05,.2951,2.1,.2922,2.15,.2892,2.2,.2864,2.25,.2835,2.3,.2807,2.35,.2779,2.4,.2752,2.45,.2725,2.5,.2697,2.55,.267,2.6,.2643,2.65,.2615,2.7,.2588,2.75,.2561,2.8,.2533,2.85,.2506,2.9,.2479,2.95,.2451,3,.2424,3.1,.2368,3.2,.2313,3.3,.2258,3.4,.2205,3.5,.2154,3.6,.2106,3.7,.206,3.8,.2017,3.9,.1975,4,.1935,4.2,.1861,4.4,.1793,4.6,.173,4.8,.1672,5,.1618];
+
+function cd(t, m) {
+  const n = t.length / 2;
+  if (m <= t[0]) return t[1];
+  if (m >= t[2 * (n - 1)]) return t[2 * n - 1];
+  let lo = 0, hi = n - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (t[2 * mid] <= m) lo = mid; else hi = mid; }
+  const m0 = t[2 * lo], c0 = t[2 * lo + 1], m1 = t[2 * hi], c1 = t[2 * hi + 1];
+  return c0 + (c1 - c0) * (m - m0) / (m1 - m0);
+}
+
+// ---------- Atmosphere ----------
+function density(tC, pHpa, hum) {
+  const tK = tC + 273.15;
+  const es = 610.78 * Math.exp(17.27 * tC / (tC + 237.3));
+  const pv = Math.min(Math.max(hum, 0), 100) / 100 * es;
+  return (pHpa * 100 - pv) / (287.058 * tK) + pv / (461.495 * tK);
+}
+const speedOfSound = tC => 20.0468 * Math.sqrt(tC + 273.15);
+const pressureAtAltitude = m => 1013.25 * Math.pow(1 - 2.25577e-5 * m, 5.25588);
+
+// ---------- Solver: RK4 point mass in the line-of-sight frame (x downrange, y up, z right) ----------
+function makeSolver(p) {
+  const bcSi = p.bc * 703.0696, sightH = p.sightHeightMm / 1000, massKg = p.bulletGr * 6.479891e-5;
+  const table = p.model === "G1" ? G1 : G7;
+  const mvAt = tC => p.mv + (tC - p.mvTempC) * p.mvSens;
+
+  function integrate(bore, s, mv, ranges) {
+    const c = speedOfSound(s.temp), k0 = density(s.temp, s.pressure, s.humidity) * Math.PI / (8 * bcSi);
+    const th = s.angle * Math.PI / 180, gx = -9.80665 * Math.sin(th), gy = -9.80665 * Math.cos(th);
+    const wa = s.windClock * Math.PI / 6, wx = -s.windSpeed * Math.cos(wa), wz = -s.windSpeed * Math.sin(wa);
+    const om = 7.292115e-5, lat = s.latitude * Math.PI / 180, az = s.azimuth * Math.PI / 180;
+    const ox = om * Math.cos(lat) * Math.cos(az), oy = om * Math.sin(lat), oz = -om * Math.cos(lat) * Math.sin(az);
+    const cor = !!s.coriolis;
+    const a = new Float64Array(3);
+    function acc(vx, vy, vz) {
+      const rx = vx - wx, rz = vz - wz, sp = Math.sqrt(rx * rx + vy * vy + rz * rz);
+      const k = k0 * cd(table, sp / c) * sp;
+      let ax = -k * rx + gx, ay = -k * vy + gy, azz = -k * rz;
+      if (cor) { ax -= 2 * (oy * vz - oz * vy); ay -= 2 * (oz * vx - ox * vz); azz -= 2 * (ox * vy - oy * vx); }
+      a[0] = ax; a[1] = ay; a[2] = azz;
+    }
+    const out = new Array(ranges.length).fill(null);
+    let x = 0, y = -sightH, z = 0, vx = mv * Math.cos(bore), vy = mv * Math.sin(bore), vz = 0, t = 0, idx = 0;
+    while (idx < ranges.length && ranges[idx] <= 0) { out[idx] = [0, y, z, mv, 0]; idx++; }
+    const dt = 0.0005;
+    while (idx < ranges.length && t < 20 && vx > 30) {
+      acc(vx, vy, vz); const a1x = a[0], a1y = a[1], a1z = a[2];
+      const v2x = vx + a1x * dt / 2, v2y = vy + a1y * dt / 2, v2z = vz + a1z * dt / 2;
+      acc(v2x, v2y, v2z); const a2x = a[0], a2y = a[1], a2z = a[2];
+      const v3x = vx + a2x * dt / 2, v3y = vy + a2y * dt / 2, v3z = vz + a2z * dt / 2;
+      acc(v3x, v3y, v3z); const a3x = a[0], a3y = a[1], a3z = a[2];
+      const v4x = vx + a3x * dt, v4y = vy + a3y * dt, v4z = vz + a3z * dt;
+      acc(v4x, v4y, v4z); const a4x = a[0], a4y = a[1], a4z = a[2];
+      const nx = x + dt / 6 * (vx + 2 * v2x + 2 * v3x + v4x);
+      const ny = y + dt / 6 * (vy + 2 * v2y + 2 * v3y + v4y);
+      const nz = z + dt / 6 * (vz + 2 * v2z + 2 * v3z + v4z);
+      const nvx = vx + dt / 6 * (a1x + 2 * a2x + 2 * a3x + a4x);
+      const nvy = vy + dt / 6 * (a1y + 2 * a2y + 2 * a3y + a4y);
+      const nvz = vz + dt / 6 * (a1z + 2 * a2z + 2 * a3z + a4z);
+      while (idx < ranges.length && nx >= ranges[idx]) {
+        const f = (ranges[idx] - x) / (nx - x);
+        const s0 = Math.hypot(vx, vy, vz), s1 = Math.hypot(nvx, nvy, nvz);
+        out[idx] = [ranges[idx], y + f * (ny - y), z + f * (nz - z), s0 + f * (s1 - s0), t + f * dt];
+        idx++;
+      }
+      x = nx; y = ny; z = nz; vx = nvx; vy = nvy; vz = nvz; t += dt;
+    }
+    return out;
+  }
+
+  let bore = null;
+  function boreAngle() {
+    if (bore !== null) return bore;
+    bore = 0;
+    if (p.zeroM <= 0) return bore;
+    const s = { temp: p.zeroTempC, pressure: p.zeroPressureHpa, humidity: 50, angle: 0, windSpeed: 0, windClock: 3, latitude: 0, azimuth: 0, coriolis: false };
+    const mv = mvAt(p.zeroTempC);
+    let ang = sightH / p.zeroM;
+    for (let i = 0; i < 30; i++) {
+      const r = integrate(ang, s, mv, [p.zeroM])[0];
+      if (!r) break;
+      if (Math.abs(r[1]) < 1e-6) break;
+      ang -= r[1] / p.zeroM;
+    }
+    return (bore = ang);
+  }
+
+  // Miller stability, corrected for velocity and air; 0 when bullet length or twist is unknown.
+  function stability(s) {
+    if (!(p.twistIn > 0 && p.bulletLenMm > 0 && p.caliberMm > 0 && p.bulletGr > 0)) return 0;
+    const d = p.caliberMm / 25.4, l = p.bulletLenMm / 25.4 / d, tw = p.twistIn / d;
+    let sg = 30 * p.bulletGr / (tw * tw * d * d * d * l * (1 + l * l));
+    sg *= Math.cbrt(mvAt(s.temp) / FT / 2800);
+    const tF = s.temp * 9 / 5 + 32;
+    sg *= (tF + 460) / (59 + 460) * 29.92 / (s.pressure * 0.02953);
+    return sg;
+  }
+
+  function solve(s, ranges) {
+    const raw = integrate(boreAngle(), s, mvAt(s.temp), ranges);
+    const sg = stability(s), c = speedOfSound(s.temp), dir = p.rightTwist ? 1 : -1;
+    return raw.map(r => {
+      if (!r) return null;
+      const [x, y, z, v, t] = r;
+      const sd = sg > 0 ? dir * 1.25 * (sg + 1.2) * Math.pow(t, 1.83) * INCH : 0;
+      const zz = z + sd, lead = s.targetSpeed * t;
+      return {
+        range: x, y, z: zz, spin: sd, v, energy: 0.5 * massKg * v * v, tof: t, mach: v / c, lead,
+        elevMil: x > 0 ? Math.atan2(-y, x) * 1000 : 0,
+        windMil: x > 0 ? Math.atan2(-zz, x) * 1000 : 0,
+        leadMil: x > 0 ? Math.atan2(lead, x) * 1000 : 0,
+      };
+    });
+  }
+  return { solve, stability, mvAt };
+}
+
+// ---------- Factory ammo ----------
+// Hornady: [caliber, line, bullet, grains, G1 BC, muzzle m/s, diameter mm, item] from the 2026 International Catalogue.
+const HORNADY = [
+["17 Mach 2","Varmint Express","V-MAX",17,0.125,640,4.37,"83177"],
+["17 HMR","Varmint Express","NTX",15.5,0.115,770,4.37,"83171"],
+["17 HMR","Varmint Express","V-MAX",17,0.125,777,4.37,"83170"],
+["17 HMR","Varmint Express","XTP",20,0.125,724,4.37,"83172"],
+["17 Hornet","Superformance Varmint","V-MAX",20,0.185,1113,4.37,"83005"],
+["4.6 x 30mm","BLACK","V-MAX",38,0.100,640,4.65,"90044"],
+["204 Ruger","Superformance Varmint","NTX",24,0.170,1341,5.18,"83209"],
+["204 Ruger","Superformance Varmint","V-MAX",32,0.210,1288,5.18,"83204"],
+["204 Ruger","Superformance Varmint","V-MAX",40,0.275,1189,5.18,"83206"],
+["22 WMR","Varmint Express","V-MAX",30,0.095,671,5.69,"83202"],
+["22 LR","Varmint Express","LRN",40,0.120,326,5.66,"83211"],
+["22 Hornet","Varmint Express","V-MAX",35,0.109,936,5.69,"8302"],
+["218 Bee","Custom","HP",45,0.108,835,5.69,"8307"],
+["222 Rem","Superformance Varmint","NTX",35,0.177,1146,5.69,"8309"],
+["222 Rem","Superformance Varmint","V-MAX",50,0.242,1020,5.69,"8316"],
+["222 Rem","Train/Hunt","OTM",52,0.229,994,5.69,"83169"],
+["5.45 x 39mm","BLACK","V-MAX",60,0.285,856,5.61,"81247"],
+["223 Rem","Superformance Varmint","NTX",35,0.177,1219,5.69,"83266"],
+["223 Rem","International","ECX",50,0.164,1024,5.69,"832604"],
+["223 Rem","Superformance","CX",50,0.164,1006,5.69,"83292"],
+["223 Rem","Superformance Varmint","V-MAX",53,0.290,1056,5.69,"8025"],
+["223 Rem","Critical Defense","FTX",55,0.175,988,5.69,"80270"],
+["223 Rem","American Gunner","HP",55,0.223,988,5.69,"80237"],
+["223 Rem","Custom","SP",55,0.235,985,5.69,"80255"],
+["223 Rem","Custom","FMJ-BT",55,0.243,978,5.69,"80275"],
+["223 Rem","Varmint Express","V-MAX",55,0.255,988,5.69,"8327"],
+["223 Rem","BLACK","FMJ",62,0.274,945,5.69,"80234"],
+["223 Rem","Critical Defense","FTX",73,0.260,850,5.69,"80260"],
+["223 Rem","Match","ELD Match",73,0.398,850,5.69,"80269"],
+["223 Rem","BLACK","BTHP",75,0.395,850,5.69,"80267"],
+["223 Rem","Match","BTHP",75,0.395,850,5.69,"8026"],
+["223 Rem","Superformance Match","BTHP",75,0.395,893,5.69,"80264"],
+["5.56 NATO","Superformance","CX",55,0.180,968,5.69,"812544"],
+["5.56 NATO","BLACK","FMJ",62,0.274,933,5.69,"81263"],
+["5.56 NATO","Superformance Match","BTHP",75,0.355,887,5.69,"81264"],
+["5.56 NATO","BLACK","InterLock HD SBR",75,0.230,704,5.69,"81296"],
+["22 ARC","V-Match","ELD-VT",62,0.395,1006,5.69,"81542"],
+["22 ARC","Superformance","CX",70,0.392,953,5.69,"81539"],
+["22 ARC","BLACK","ELD Match",75,0.467,940,5.69,"81541"],
+["22 ARC","Precision Hunter","ELD-X",80,0.485,917,5.69,"81544"],
+["22 ARC","Match","ELD Match",88,0.545,863,5.69,"81543"],
+["223 WSSM","Superformance Varmint","V-MAX",55,0.255,1173,5.69,"8308"],
+["224 Valkyrie","Varmint Express","V-MAX W/C",60,0.265,1006,5.69,"81531"],
+["224 Valkyrie","V-Match","ELD-VT",62,0.395,1006,5.69,"81533"],
+["224 Valkyrie","BLACK","BTHP",75,0.395,914,5.69,"81532"],
+["224 Valkyrie","Match","ELD Match",88,0.545,815,5.69,"81534"],
+["22-250 Rem","Superformance Varmint","NTX",35,0.177,1356,5.69,"8334"],
+["22-250 Rem","Varmint Express","V-MAX",50,0.242,1158,5.69,"8336"],
+["22-250 Rem","Superformance Varmint","V-MAX",50,0.242,1219,5.69,"83366"],
+["22-250 Rem","Varmint Express","V-MAX",55,0.255,1122,5.69,"8337"],
+["22 Creedmoor","Superformance","CX",65,0.365,1116,5.69,"83413"],
+["22 Creedmoor","V-Match","ELD-VT",69,0.424,1082,5.69,"83414"],
+["22 Creedmoor","Match","ELD Match",80,0.485,1001,5.69,"83411"],
+["22 Creedmoor","Precision Hunter","ELD-X",80,0.485,1001,5.69,"83412"],
+["220 Swift","Varmint Express","V-MAX",55,0.255,1122,5.69,"8324"],
+["6mm ARC","V-Match","ELD-VT",80,0.410,920,6.17,"81603"],
+["6mm ARC","Custom","CX",90,0.418,899,6.17,"81612"],
+["6mm ARC","Precision Hunter","ELD-X",103,0.512,853,6.17,"81602"],
+["6mm ARC","BLACK","BTHP",105,0.530,838,6.17,"81604"],
+["6mm ARC","Match","ELD Match",108,0.536,838,6.17,"81608"],
+["243 Win","Superformance Varmint","V-MAX",58,0.250,1196,6.17,"8343"],
+["243 Win","Superformance Varmint","V-MAX",75,0.330,1091,6.17,"83433"],
+["243 Win","Outfitter","CX",80,0.273,975,6.17,"804574"],
+["243 Win","Custom Lite","SST",87,0.400,853,6.17,"80466"],
+["243 Win","Custom","V-MAX",87,0.400,988,6.17,"80468"],
+["243 Win","Precision Hunter","ELD-X",90,0.410,960,6.17,"80462"],
+["243 Win","American Whitetail Tipped","SST",95,0.355,905,6.17,"80461"],
+["243 Win","Superformance","SST",95,0.355,971,6.17,"80463"],
+["243 Win","American Whitetail","InterLock BTSP",100,0.405,902,6.17,"8047"],
+["6mm Rem","Superformance","SST",95,0.355,986,6.17,"81663"],
+["6mm Creedmoor","V-Match","ELD-VT",80,0.410,1006,6.17,"81397"],
+["6mm Creedmoor","Varmint Express","V-MAX",87,0.400,978,6.17,"81393"],
+["6mm Creedmoor","Superformance","CX",90,0.418,1013,6.17,"813944"],
+["6mm Creedmoor","Precision Hunter","ELD-X",103,0.512,930,6.17,"81392"],
+["6mm Creedmoor","BLACK","BTHP",105,0.512,902,6.17,"81396"],
+["6mm Creedmoor","Match","ELD Match",108,0.536,902,6.17,"81391"],
+["6mm GT","Match","ELD Match",109,0.557,875,6.17,"81597"],
+["243 WSSM","Superformance Varmint","V-MAX",75,0.330,1079,6.17,"80411"],
+["25-35 Win","LEVERevolution","FTX",110,0.340,739,6.53,"8277"],
+["250 Savage","Custom","InterLock SP",100,0.350,853,6.53,"8132"],
+["257 Roberts +P","Superformance","SST",117,0.390,898,6.53,"81353"],
+["25 Creedmoor","V-Match","ELD-VT",95,0.453,991,6.53,"81424"],
+["25 Creedmoor","Superformance","CX",112,0.524,960,6.53,"81423"],
+["25 Creedmoor","Precision Hunter","ELD-X",128,0.633,869,6.53,"81422"],
+["25 Creedmoor","Match","ELD Match",134,0.645,853,6.53,"81421"],
+["25-06 Rem","Superformance","CX",90,0.273,1021,6.53,"814464"],
+["25-06 Rem","Precision Hunter","ELD-X",110,0.465,957,6.53,"8143"],
+["25-06 Rem","Superformance","SST",117,0.390,948,6.53,"81453"],
+["25-06 Rem","American Whitetail","InterLock BTSP",117,0.391,911,6.53,"8144"],
+["257 Wby Mag","Outfitter","CX",90,0.273,1105,6.53,"813624"],
+["257 Wby Mag","Precision Hunter","ELD-X",110,0.465,988,6.53,"81364"],
+["6.5 Grendel","Custom","CX",90,0.356,887,6.71,"81513"],
+["6.5 Grendel","V-Match","ELD-VT",100,0.448,832,6.71,"81521"],
+["6.5 Grendel","BLACK","ELD Match",123,0.506,786,6.71,"81528"],
+["6.5 Grendel","Custom","SST",123,0.506,786,6.71,"8152"],
+["6.5 x 55mm Swedish Mauser","Train/Hunt","OTM",100,0.384,971,6.71,"81471"],
+["6.5 x 55mm Swedish Mauser","International","ECX",120,0.360,826,6.71,"81472"],
+["6.5 x 55mm Swedish Mauser","International","ECX",140,0.301,777,6.71,"814784"],
+["6.5 x 55mm Swedish Mauser","Vintage Match","BTHP",140,0.580,792,6.71,"85508"],
+["6.5 x 55mm Swedish Mauser","Superformance","SST",140,0.520,834,6.71,"85507"],
+["260 Rem","Superformance","SST",129,0.485,893,6.71,"8552"],
+["260 Rem","Match","ELD Match",130,0.554,866,6.71,"8553"],
+["6.5 Creedmoor","Varmint Express","V-MAX",95,0.365,1006,6.71,"81481"],
+["6.5 Creedmoor","V-Match","ELD-VT",100,0.448,975,6.71,"81504"],
+["6.5 Creedmoor","Outfitter","CX",120,0.428,892,6.71,"814874"],
+["6.5 Creedmoor","Superformance","CX",120,0.428,930,6.71,"814904"],
+["6.5 Creedmoor","International","ECX",120,0.360,884,6.71,"81517"],
+["6.5 Creedmoor","Match","ELD Match",120,0.486,887,6.71,"81491"],
+["6.5 Creedmoor","American Whitetail Tipped","SST",129,0.485,860,6.71,"81509"],
+["6.5 Creedmoor","Superformance","SST",129,0.485,899,6.71,"81496"],
+["6.5 Creedmoor","American Whitetail","InterLock",129,0.445,860,6.71,"81489"],
+["6.5 Creedmoor","Custom International","InterLock SP",140,0.465,823,6.71,"81502"],
+["6.5 Creedmoor","Match","ELD Match",140,0.646,826,6.71,"81500"],
+["6.5 Creedmoor","American Gunner","BTHP",140,0.580,820,6.71,"81482"],
+["6.5 Creedmoor","Precision Hunter","ELD-X",143,0.623,823,6.71,"81499"],
+["6.5 Creedmoor","Match","ELD Match",147,0.697,821,6.71,"81501"],
+["6.5 PRC","V-Match","ELD-VT",100,0.448,1052,6.71,"81627"],
+["6.5 PRC","American Whitetail Tipped","SST",129,0.485,954,6.71,"81624"],
+["6.5 PRC","Outfitter","CX",130,0.489,907,6.71,"81622"],
+["6.5 PRC","Precision Hunter","ELD-X",143,0.623,902,6.71,"81621"],
+["6.5 PRC","Match","ELD Match",147,0.697,887,6.71,"81620"],
+["6.8mm SPC","Custom","CX",100,0.262,777,7.04,"834814"],
+["6.8mm SPC","BLACK","V-MAX",110,0.370,785,7.04,"83464"],
+["6.8mm SPC","Custom","SST",120,0.400,750,7.04,"8347"],
+["270 Win","Outfitter","CX",130,0.403,914,7.04,"805294"],
+["270 Win","Superformance","CX",130,0.403,972,7.04,"80524"],
+["270 Win","American Whitetail Tipped","SST",130,0.460,933,7.04,"80542"],
+["270 Win","Superformance","SST",130,0.460,975,7.04,"80543"],
+["270 Win","American Whitetail","InterLock SP",130,0.462,933,7.04,"8053"],
+["270 Win","Superformance","SST",140,0.495,942,7.04,"80563"],
+["270 Win","Precision Hunter","ELD-X",145,0.536,905,7.04,"80536"],
+["270 WSM","Outfitter","CX",130,0.403,960,7.04,"805574"],
+["270 WSM","Precision Hunter","ELD-X",145,0.536,945,7.04,"80558"],
+["7 x 57mm Mauser","International","ECX",150,0.287,803,7.21,"815584"],
+["275 Rigby","Custom","InterLock SP",140,0.392,817,7.21,"8070"],
+["7mm-08 Rem","Custom Lite","SST",120,0.365,815,7.21,"80572"],
+["7mm-08 Rem","Superformance","CX",139,0.429,887,7.21,"805764"],
+["7mm-08 Rem","American Whitetail Tipped","SST",139,0.486,866,7.21,"80578"],
+["7mm-08 Rem","Superformance","SST",139,0.486,899,7.21,"80573"],
+["7mm-08 Rem","American Whitetail","InterLock SP",139,0.392,866,7.21,"8057"],
+["7mm-08 Rem","Precision Hunter","ELD-X",150,0.574,844,7.21,"85578"],
+["280 Rem","Precision Hunter","ELD-X",150,0.574,892,7.21,"81587"],
+["280 Ackley Imp","Precision Hunter","ELD-X",162,0.631,869,7.21,"85586"],
+["7 x 64","International","ECX",150,0.287,856,7.21,"81579"],
+["7mm Rem Mag","American Whitetail","InterLock SP",139,0.453,960,7.21,"80591"],
+["7mm Rem Mag","Superformance","SST",139,0.486,988,7.21,"80593"],
+["7mm Rem Mag","Outfitter","CX",150,0.455,914,7.21,"806114"],
+["7mm Rem Mag","American Whitetail","InterLock SP",154,0.433,925,7.21,"80590"],
+["7mm Rem Mag","American Whitetail Tipped","SST",154,0.525,925,7.21,"80601"],
+["7mm Rem Mag","Superformance","SST",154,0.525,945,7.21,"8061"],
+["7mm Rem Mag","Superformance","SST",162,0.550,924,7.21,"80633"],
+["7mm Rem Mag","Precision Hunter","ELD-X",162,0.631,896,7.21,"80636"],
+["7mm WSM","Outfitter","CX",150,0.455,930,7.21,"805514"],
+["7mm WSM","Precision Hunter","ELD-X",162,0.631,914,7.21,"80552"],
+["7mm PRC","American Whitetail Tipped","SST",154,0.525,927,7.21,"80714"],
+["7mm PRC","Outfitter","CX",160,0.596,913,7.21,"80713"],
+["7mm PRC","Precision Hunter","ELD-X",175,0.689,913,7.21,"80712"],
+["7mm PRC","Match","ELD Match",180,0.796,902,7.21,"80711"],
+["28 Nosler","Precision Hunter","ELD-X",162,0.631,968,7.21,"8069"],
+["7mm STW","Precision Hunter","ELD-X",162,0.631,930,7.21,"80851"],
+["30 Carbine","Critical Defense","FTX",110,0.178,610,7.82,"81030"],
+["300 Blackout","Custom","CX",110,0.312,696,7.82,"808794"],
+["300 Blackout","BLACK","NTX",110,0.260,634,7.82,"80862"],
+["300 Blackout","BLACK","V-MAX",110,0.290,724,7.82,"80873"],
+["300 Blackout","American Gunner","HP",125,0.320,663,7.82,"80897"],
+["300 Blackout","Custom","FTX",135,0.274,636,7.82,"80881"],
+["300 Blackout","Subsonic","SUB-X",190,0.437,320,7.82,"80877"],
+["300 Blackout","BLACK","A-MAX",208,0.648,311,7.82,"80891"],
+["30-30 Win","LEVERevolution","MonoFlex",140,0.295,770,7.82,"82736"],
+["30-30 Win","American Whitetail","RN",150,0.186,728,7.82,"80801"],
+["30-30 Win","LEVERevolution","FTX",160,0.330,732,7.82,"82730"],
+["30-30 Win","Subsonic","SUB-X",175,0.300,320,7.82,"80809"],
+["300 Savage","Superformance","SST",150,0.370,835,7.82,"82221"],
+["308 Marlin Express","LEVERevolution","FTX",160,0.395,811,7.82,"82733"],
+["308 Win","International","ECX",125,0.181,951,7.82,"808684"],
+["308 Win","Custom Lite","SST",125,0.305,815,7.82,"80866"],
+["308 Win","International","ECX",150,0.223,856,7.82,"809484"],
+["308 Win","Outfitter","CX",150,0.418,853,7.82,"80982"],
+["308 Win","Superformance","CX",150,0.418,884,7.82,"80944"],
+["308 Win","American Whitetail Tipped","SST",150,0.415,860,7.82,"80934"],
+["308 Win","Superformance","SST",150,0.415,914,7.82,"80933"],
+["308 Win","American Whitetail","InterLock SP",150,0.349,860,7.82,"8090"],
+["308 Win","Custom","SST",150,0.415,860,7.82,"8093"],
+["308 Win","Critical Defense","FTX",155,0.313,849,7.82,"80920"],
+["308 Win","Train/Hunt","OTM",155,0.405,860,7.82,"80907"],
+["308 Win","BLACK","A-MAX",155,0.435,869,7.82,"80927"],
+["308 Win","American Gunner","BTHP",155,0.405,823,7.82,"80967"],
+["308 Win","International","ECX",165,0.251,796,7.82,"809914"],
+["308 Win","American Whitetail","InterLock SP",165,0.435,823,7.82,"80904"],
+["308 Win","Outfitter","CX",165,0.440,796,7.82,"809864"],
+["308 Win","Superformance","SST",165,0.447,866,7.82,"80983"],
+["308 Win","Superformance","CX",165,0.440,838,7.82,"80990"],
+["308 Win","Match","BTHP",168,0.450,823,7.82,"8097"],
+["308 Win","Match","ELD Match",168,0.523,823,7.82,"80966"],
+["308 Win","Superformance Match","ELD Match",168,0.523,866,7.82,"80963"],
+["308 Win","BLACK","A-MAX",168,0.475,823,7.82,"80971"],
+["308 Win","Match","BTHP",178,0.530,792,7.82,"8105"],
+["308 Win","Precision Hunter","ELD-X",178,0.552,792,7.82,"80994"],
+["308 Win","Superformance","SST",180,0.480,811,7.82,"80772"],
+["308 Win","Custom International","InterLock SP",180,0.425,792,7.82,"80993"],
+["308 Win","Custom International","InterLock RN",220,0.300,704,7.82,"8107"],
+["30-40 Krag","Custom","InterLock SP",180,0.425,741,7.82,"81202"],
+["30 TC","Superformance","SST",150,0.415,914,7.82,"81004"],
+["30-06 Springfield","Custom Lite","SST",125,0.305,823,7.82,"81066"],
+["30-06 Springfield","International","ECX",150,0.223,887,7.82,"811284"],
+["30-06 Springfield","Outfitter","CX",150,0.418,899,7.82,"81129"],
+["30-06 Springfield","Superformance","CX",150,0.418,936,7.82,"81124"],
+["30-06 Springfield","Superformance","SST",150,0.415,939,7.82,"81093"],
+["30-06 Springfield","American Whitetail","InterLock SP",150,0.338,887,7.82,"8108"],
+["30-06 Springfield","Train/Hunt","OTM",155,0.405,887,7.82,"81132"],
+["30-06 Springfield","International","ECX",165,0.251,844,7.82,"811614"],
+["30-06 Springfield","American Whitetail Tipped","SST",165,0.447,887,7.82,"81151"],
+["30-06 Springfield","Superformance","SST",165,0.447,902,7.82,"81153"],
+["30-06 Springfield","Superformance","CX",165,0.440,896,7.82,"81169"],
+["30-06 Springfield","Vintage Match","ELD Match",168,0.523,826,7.82,"81171"],
+["30-06 Springfield","Precision Hunter","ELD-X",178,0.552,838,7.82,"81174"],
+["30-06 Springfield","Outfitter","CX",180,0.469,792,7.82,"811864"],
+["30-06 Springfield","American Whitetail","InterLock SP",180,0.425,823,7.82,"81084"],
+["30-06 Springfield","Custom International","InterLock SP",180,0.425,797,7.82,"81182"],
+["30-06 Springfield","Superformance","SST",180,0.480,860,7.82,"81183"],
+["30-06 Springfield","Custom International","InterLock RN",220,0.300,721,7.82,"8114"],
+["300 RSAUM","Precision Hunter","ELD-X",178,0.552,899,7.82,"82144"],
+["300 RCM","Superformance","SST",150,0.415,1009,7.82,"82231"],
+["300 RCM","Precision Hunter","ELD-X",178,0.552,884,7.82,"82224"],
+["300 WSM","American Whitetail","InterLock",165,0.435,954,7.82,"82204"],
+["300 WSM","Outfitter","CX",180,0.469,884,7.82,"822034"],
+["300 WSM","Precision Hunter","ELD-X",200,0.597,860,7.82,"82208"],
+["300 Win Mag","American Whitetail","InterLock SP",150,0.349,998,7.82,"8204"],
+["300 Win Mag","International","ECX",165,0.251,994,7.82,"820384"],
+["300 Win Mag","American Whitetail Tipped","SST",165,0.440,960,7.82,"82024"],
+["300 Win Mag","Superformance","CX",165,0.440,994,7.82,"820264"],
+["300 Win Mag","Match","ELD Match",178,0.547,902,7.82,"82043"],
+["300 Win Mag","Precision Hunter","ELD-X",178,0.552,902,7.82,"82041"],
+["300 Win Mag","Outfitter","CX",180,0.469,902,7.82,"821974"],
+["300 Win Mag","American Whitetail","InterLock SP",180,0.425,902,7.82,"82044"],
+["300 Win Mag","Custom International","InterLock SP",180,0.425,902,7.82,"8206"],
+["300 Win Mag","Superformance","SST",180,0.480,954,7.82,"82193"],
+["300 Win Mag","Match","ELD Match",195,0.584,893,7.82,"82180"],
+["300 Win Mag","Precision Hunter","ELD-X",200,0.597,872,7.82,"82002"],
+["300 Wby Mag","Outfitter","CX",180,0.469,945,7.82,"822124"],
+["300 Wby Mag","Precision Hunter","ELD-X",200,0.597,902,7.82,"82213"],
+["300 PRC","American Whitetail Tipped","SST",165,0.447,978,7.82,"82163"],
+["300 PRC","V-Match","ELD-VT",174,0.573,960,7.82,"82168"],
+["300 PRC","Outfitter","CX",190,0.575,914,7.82,"82164"],
+["300 PRC","Precision Hunter","ELD-X",212,0.663,872,7.82,"82166"],
+["300 PRC","Match","ELD Match",225,0.777,856,7.82,"82162"],
+["300 Rem Ultra Mag","Outfitter","CX",180,0.469,975,7.82,"82084"],
+["300 Rem Ultra Mag","Precision Hunter","ELD-X",220,0.654,887,7.82,"8209"],
+["30-378 Wby Mag","Precision Hunter","ELD-X",220,0.650,922,7.82,"82214"],
+["7.62 x 39mm","BLACK","MonoFlex",111,0.175,716,7.87,"80788"],
+["7.62 x 39mm","BLACK","SST",123,0.260,716,7.87,"80784"],
+["7.62 x 39mm","American Gunner","HP Match",123,0.272,716,7.87,"80786"],
+["7.62 x 39mm","Subsonic","SUB-X",255,0.365,320,7.87,"80787"],
+["303 British","Custom","InterLock SP",150,0.361,818,7.92,"8225"],
+["32 Win Special","LEVERevolution","FTX",165,0.310,735,8.15,"82732"],
+["8 x 57 JS (IS)","International","ECX",180,0.257,796,8.20,"822974"],
+["8 x 57 JS (IS)","Custom International","InterLock SP",195,0.410,783,8.20,"82291"],
+["8 x 57 JS (IS)","Train/Hunt","OTM",196,0.525,762,8.20,"82292"],
+["8 x 57 JS (IS)","Vintage Match","BTHP",196,0.525,762,8.20,"82298"],
+["8.5 x 55 Blaser","International","ECX",185,0.244,899,8.59,"82281"],
+["338 ARC","BLACK","MonoFlex",170,0.313,632,8.59,"82273"],
+["338 ARC","BLACK","HP Match",175,0.385,632,8.59,"82271"],
+["338 ARC","BLACK","FTX",215,0.376,579,8.59,"82274"],
+["338 ARC","Subsonic","SUB-X",307,0.375,320,8.59,"82272"],
+["338 Marlin Express","LEVERevolution","FTX",200,0.430,782,8.59,"82240"],
+["338 RCM","Superformance","SST",225,0.515,838,8.59,"82236"],
+["338 Win Mag","Superformance","SST",200,0.455,924,8.59,"82223"],
+["338 Win Mag","Superformance","SST",225,0.515,866,8.59,"82233"],
+["338 Win Mag","Outfitter","CX",225,0.490,853,8.59,"823394"],
+["338 Win Mag","Precision Hunter","ELD-X",230,0.616,856,8.59,"82222"],
+["338 Lapua Mag","Custom","CX",240,0.611,884,8.59,"82318"],
+["338 Lapua Mag","Match","BTHP",250,0.670,872,8.59,"8230"],
+["338 Lapua Mag","Precision Hunter","ELD-X",270,0.757,853,8.59,"82313"],
+["338 Lapua Mag","Match","ELD Match",285,0.829,837,8.59,"82300"],
+["348 Win","LEVERevolution","FTX",200,0.320,780,8.84,"82738"],
+["350 Legend","American Whitetail Tipped","FTX",165,0.250,671,9.02,"81197"],
+["350 Legend","American Whitetail","InterLock SP",170,0.215,671,9.02,"81196"],
+["350 Legend","Subsonic","SUB-X",250,0.265,320,9.02,"81198"],
+["35 Rem","LEVERevolution","FTX",200,0.300,678,9.09,"82735"],
+["35 Whelen","Superformance","InterLock SP",200,0.282,887,9.09,"81193"],
+["358 Win","Custom","InterLock SP",200,0.282,754,9.09,"91318"],
+["9.3 x 74R","Dangerous Game","InterLock SP-RP",286,0.400,719,9.30,"82304"],
+["9.3 x 62mm","International","ECX",250,0.315,757,9.30,"823084"],
+["9.3 x 62mm","Train/Hunt","OTM",286,0.460,719,9.30,"82299"],
+["9.3 x 62mm","Dangerous Game","InterLock SP-RP",286,0.400,719,9.30,"82303"],
+["9.3 x 62mm","Custom International","InterLock SP",286,0.400,722,9.30,"82302"],
+["376 Steyr","Dangerous Game","InterLock SP-RP",225,0.320,792,9.53,"8234"],
+["376 Steyr","Dangerous Game","InterLock SP-RP",270,0.380,792,9.53,"8237"],
+["375 H&H Mag","Outfitter","CX",250,0.403,823,9.53,"823314"],
+["375 H&H Mag","Dangerous Game","InterLock SP-RP SPF",270,0.380,853,9.53,"8508"],
+["375 H&H Mag","Dangerous Game","DGS",300,0.275,771,9.53,"82322"],
+["375 H&H Mag","Dangerous Game","DGX Bonded",300,0.275,771,9.53,"82334"],
+["375 Ruger","Outfitter","CX",250,0.403,853,9.53,"823374"],
+["375 Ruger","Dangerous Game","InterLock SP-RP",270,0.380,866,9.53,"8231"],
+["375 Ruger","Dangerous Game","DGX Bonded",300,0.275,811,9.53,"82336"],
+["375 Ruger","Dangerous Game","DGS",300,0.275,811,9.53,"8232"],
+["450-400 Nitro Express 3\"","Dangerous Game","DGX Bonded",400,0.325,625,10.44,"82432"],
+["450-400 Nitro Express 3\"","Dangerous Game","DGS",400,0.325,625,10.44,"8242"],
+["400 Legend","American Whitetail","InterLock",210,0.201,671,10.19,"82461"],
+["405 Win","Custom","InterLock SP",300,0.250,671,10.44,"8241"],
+["416 Ruger","Dangerous Game","DGX Bonded",400,0.319,732,10.57,"82667"],
+["416 Ruger","Dangerous Game","DGS",400,0.319,732,10.57,"82666"],
+["416 Rem Mag","Dangerous Game","DGX Bonded",400,0.319,732,10.57,"82672"],
+["416 Rem Mag","Dangerous Game","DGS",400,0.319,732,10.57,"82674"],
+["416 Rigby","Dangerous Game","DGX Bonded",400,0.319,736,10.57,"82661"],
+["416 Rigby","Dangerous Game","DGS",400,0.319,736,10.57,"8265"],
+["404 Jeffery","Dangerous Game","DGX Bonded",400,0.325,701,10.74,"82381"],
+["404 Jeffery","Dangerous Game","DGS",400,0.325,701,10.74,"8239"],
+["444 Marlin","Superformance","InterLock FP",265,0.189,732,10.90,"82453"],
+["444 Marlin","LEVERevolution","FTX",265,0.225,709,10.90,"82744"],
+["450 Bushmaster","American Whitetail","InterLock",245,0.165,671,11.63,"82242"],
+["450 Bushmaster","American Whitetail Tipped","FTX",250,0.210,671,11.63,"82244"],
+["450 Bushmaster","BLACK","FTX",250,0.210,671,11.63,"82246"],
+["450 Bushmaster","Subsonic","SUB-X",395,0.300,320,11.63,"82247"],
+["45-70 Govt","LEVERevolution","MonoFlex",250,0.182,640,11.63,"82743"],
+["45-70 Govt","LEVERevolution","FTX",325,0.230,610,11.63,"82747"],
+["45-70 Govt","Subsonic","SUB-X",410,0.285,328,11.63,"82742"],
+["450 Marlin","LEVERevolution","FTX",325,0.230,678,11.63,"82750"],
+["450 Nitro Express 3¼\"","Dangerous Game","DGX Bonded",480,0.285,655,11.63,"8257"],
+["450 Nitro Express 3¼\"","Dangerous Game","DGS",480,0.285,655,11.63,"8256"],
+["458 Win Mag","Dangerous Game","DGX Bonded SPF",500,0.295,652,11.63,"85834"],
+["458 Win Mag","Dangerous Game","DGS SPF",500,0.295,652,11.63,"8585"],
+["458 Lott","Dangerous Game","DGX Bonded",500,0.295,701,11.63,"82614"],
+["458 Lott","Dangerous Game","DGS",500,0.295,701,11.63,"8262"],
+["470 Nitro Express","Dangerous Game","DGX Bonded",500,0.290,655,12.04,"82631"],
+["470 Nitro Express","Dangerous Game","DGS",500,0.290,655,12.04,"8264"],
+["500 Nitro Express 3\"","Dangerous Game","DGX Bonded",570,0.295,646,12.95,"82689"],
+["500 Nitro Express 3\"","Dangerous Game","DGS",570,0.295,646,12.95,"8269"],
+["50 BMG","Match","A-MAX",750,1.050,858,12.95,"8270"]
+];
+const OTHERS = [
+  ["223 Rem","Remington Core-Lokt","PSP",55,.197,"G1",3240,5.69],
+  ["22-250 Rem","Remington Core-Lokt","PSP",55,.197,"G1",3680,5.69],
+  ["243 Win","Remington Core-Lokt","PSP",100,.356,"G1",2960,6.17],
+  ["243 Win","Winchester Super-X","Power-Point",100,.356,"G1",2960,6.17],
+  ["270 Win","Remington Core-Lokt","PSP",130,.336,"G1",3060,7.04],
+  ["270 Win","Winchester Super-X","Power-Point",130,.372,"G1",3060,7.04],
+  ["7mm-08 Rem","Remington Core-Lokt","PSP",140,.390,"G1",2860,7.21],
+  ["7mm Rem Mag","Remington Core-Lokt","PSP",150,.346,"G1",3110,7.21],
+  ["308 Win","Federal Gold Medal","SMK",168,.462,"G1",2650,7.82],
+  ["308 Win","Federal Gold Medal","SMK",175,.243,"G7",2600,7.82,31.2],
+  ["308 Win","Remington Core-Lokt","PSP",150,.314,"G1",2820,7.82],
+  ["308 Win","Remington Core-Lokt","PSP",180,.383,"G1",2620,7.82],
+  ["308 Win","Winchester Super-X","Power-Point",150,.294,"G1",2820,7.82],
+  ["30-06 Springfield","Remington Core-Lokt","PSP",150,.314,"G1",2910,7.82],
+  ["30-06 Springfield","Remington Core-Lokt","PSP",180,.383,"G1",2700,7.82],
+  ["30-06 Springfield","Winchester Super-X","Power-Point",150,.294,"G1",2920,7.82],
+  ["300 Win Mag","Remington Core-Lokt","PSP",180,.383,"G1",2960,7.82],
+  ["300 Win Mag","Winchester Super-X","Power-Point",150,.294,"G1",3290,7.82],
+];
+const AMMO = (() => {
+  const all = HORNADY.map(h => ({ cal: h[0], brand: "Hornady " + h[1], bullet: h[2], gr: h[3], bc: h[4], model: "G1", mv: h[5], dia: h[6], len: 0, item: h[7] }))
+    .concat(OTHERS.map(o => ({ cal: o[0], brand: o[1], bullet: o[2], gr: o[3], bc: o[4], model: o[5], mv: Math.round(o[6] * FT * 10) / 10, dia: o[7], len: o[8] || 0, item: "" })));
+  const order = [...new Set(all.map(a => a.cal))];
+  return all.sort((a, b) => order.indexOf(a.cal) - order.indexOf(b.cal) || a.gr - b.gr || a.brand.localeCompare(b.brand));
+})();
+const CALIBERS = [...new Set(AMMO.map(a => a.cal))];
+const ammoLabel = a => `${a.brand} ${a.bullet} ${a.gr}gr`;
+
+// ---------- State (saved on this device) ----------
+const DEFAULT_PROFILES = [
+  { id: 1, name: ".308 Win 175gr SMK", caliberMm: 7.82, bulletGr: 175, bc: .243, model: "G7", mv: 790, mvTempC: 15, mvSens: 0, sightHeightMm: 45, zeroM: 100, zeroYards: false, zeroTempC: 15, zeroPressureHpa: 1013.25, twistIn: 10, rightTwist: true, bulletLenMm: 31.2, clickUnit: "MIL", clickValue: .1 },
+  { id: 2, name: "6.5 CM 140gr ELD-M", caliberMm: 6.71, bulletGr: 140, bc: .326, model: "G7", mv: 823, mvTempC: 15, mvSens: 0, sightHeightMm: 45, zeroM: 100, zeroYards: false, zeroTempC: 15, zeroPressureHpa: 1013.25, twistIn: 8, rightTwist: true, bulletLenMm: 35.6, clickUnit: "MIL", clickValue: .1 },
+  { id: 3, name: ".223 Rem 55gr FMJ", caliberMm: 5.69, bulletGr: 55, bc: .243, model: "G1", mv: 975, mvTempC: 15, mvSens: 0, sightHeightMm: 60, zeroM: 100, zeroYards: false, zeroTempC: 15, zeroPressureHpa: 1013.25, twistIn: 9, rightTwist: true, bulletLenMm: 19, clickUnit: "MOA", clickValue: .25 },
+];
+const DEFAULTS = {
+  tab: "solve", selected: 1, range: 300, angle: 0, windSpeed: 3, windClock: 3, targetSpeed: 0,
+  temp: 15, pressure: 1013.25, humidity: 50, useAlt: false, altitude: 0, coriolis: false, latitude: -41, azimuth: 0,
+  tStart: 100, tEnd: 1000, tStep: 50, yards: false, corr: 0,
+};
+const KEY = "trajecta.v1";
+let state;
+try { state = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { state = null; }
+state = Object.assign({}, DEFAULTS, state || {});
+if (!Array.isArray(state.profiles) || !state.profiles.length) state.profiles = JSON.parse(JSON.stringify(DEFAULT_PROFILES));
+function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* storage unavailable: keep working in memory */ } }
+
+const selected = () => state.profiles.find(p => p.id === state.selected) || state.profiles[0];
+const shot = () => ({
+  temp: state.temp, pressure: state.useAlt ? pressureAtAltitude(state.altitude) : state.pressure, humidity: state.humidity,
+  angle: state.angle, windSpeed: state.windSpeed, windClock: state.windClock, targetSpeed: state.targetSpeed,
+  coriolis: state.coriolis, latitude: state.latitude, azimuth: state.azimuth,
+});
+
+// ---------- Units & formatting ----------
+const du = () => state.yards ? YD : 1;
+const dName = () => state.yards ? "yd" : "m";
+const dist = m => m / du();
+const corrMoa = p => state.corr === 1 ? false : state.corr === 2 ? true : p.clickUnit === "MOA";
+const corrName = p => corrMoa(p) ? "MOA" : "MIL";
+const corr = (p, mil) => corrMoa(p) ? mil * MIL_TO_MOA : mil;
+const clicks = (p, mil) => p.clickValue > 0 ? Math.round((p.clickUnit === "MOA" ? mil * MIL_TO_MOA : mil) / p.clickValue) : 0;
+const small = m => state.yards ? `${f1(m / INCH)} in` : `${f1(m * 100)} cm`;
+const energy = j => state.yards ? `${f0(j * FTLB)} ft·lb` : `${f0(j)} J`;
+const f0 = v => (Math.abs(v) < 0.5 ? 0 : v).toFixed(0), f1 = v => v.toFixed(1), f2 = v => v.toFixed(2), f3 = v => v.toFixed(3);
+const r1 = v => String(Math.round(v * 10) / 10);
+const zeroText = p => p.zeroYards ? `${Math.round(p.zeroM / YD)} yd` : `${Math.round(p.zeroM)} m`;
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const num = s => { const v = parseFloat(String(s).replace(",", ".")); return Number.isFinite(v) ? v : null; };
+const lr = (v, dec = 2) => { const s = Math.abs(v).toFixed(dec); return Number(s) === 0 ? s : (v > 0 ? "R" : "L") + s; };
+
+// ---------- Small UI builders ----------
+const main = document.getElementById("main");
+function field(id, label, value, { unit = "", signed = false, hint = "" } = {}) {
+  return `<div class="row"><label for="${id}">${label}${hint ? `<span class="hint">${hint}</span>` : ""}</label>
+    <span class="field">${signed ? `<button class="pm" type="button" data-neg="${id}" aria-label="Flip sign">±</button>` : ""}
+    <input type="text" inputmode="decimal" autocomplete="off" id="${id}" value="${esc(value)}"><span class="unit">${unit}</span></span></div>`;
+}
+function seg(name, options, current) {
+  return `<span class="seg" role="group">${options.map(([v, l]) => `<button type="button" data-seg="${name}" data-val="${v}" aria-pressed="${String(v) === String(current)}">${l}</button>`).join("")}</span>`;
+}
+function segRow(label, name, options, current) { return `<div class="row"><span class="lbl">${label}</span>${seg(name, options, current)}</div>`; }
+function bindNum(id, onValue) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener("input", () => { const v = num(el.value); if (v !== null) onValue(v); });
+  el.addEventListener("focus", () => el.select());
+}
+// State-bound numeric field: stores `value * scale` under `key` and calls `after`.
+function bindState(id, key, scale, after) { bindNum(id, v => { state[key] = v * scale; save(); after && after(); }); }
+function bindNegs(root) {
+  root.querySelectorAll("[data-neg]").forEach(b => b.addEventListener("click", () => {
+    const el = document.getElementById(b.dataset.neg); const v = num(el.value);
+    if (v !== null) { el.value = r1(-v); el.dispatchEvent(new Event("input")); }
+  }));
+}
+function rifleSelect() {
+  return `<div class="panel"><div class="row"><label for="rifle">Rifle</label>
+    <select id="rifle">${state.profiles.map(p => `<option value="${p.id}"${p.id === selected().id ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</select></div></div>`;
+}
+function unitsPanel() {
+  return `<div class="panel">${segRow("Distance", "yards", [[0, "Metres"], [1, "Yards"]], state.yards ? 1 : 0)}
+    ${segRow("Corrections", "corr", [[0, `Scope (${selected().clickUnit})`], [1, "MIL"], [2, "MOA"]], state.corr)}</div>`;
+}
+function rangeStepper() {
+  return `<div class="stepper">
+    <button class="pm" type="button" data-step="-50">−50</button><button class="pm" type="button" data-step="-10">−10</button>
+    <span class="rangewrap"><input type="text" inputmode="decimal" id="range" value="${r1(dist(state.range))}" aria-label="Target range"><span>${dName()}</span></span>
+    <button class="pm" type="button" data-step="10">+10</button><button class="pm" type="button" data-step="50">+50</button></div>`;
+}
+// Shared wiring for rifle picker, unit toggles and range stepper.
+function bindCommon(rerender, onRange) {
+  const rs = document.getElementById("rifle");
+  if (rs) rs.addEventListener("change", () => { state.selected = Number(rs.value); save(); rerender(); });
+  main.querySelectorAll('[data-seg="yards"],[data-seg="corr"]').forEach(b => b.addEventListener("click", () => {
+    state[b.dataset.seg] = b.dataset.seg === "yards" ? b.dataset.val === "1" : Number(b.dataset.val); save(); rerender();
+  }));
+  const r = document.getElementById("range");
+  if (r) {
+    bindNum("range", v => { state.range = Math.max(0, v) * du(); save(); onRange(); });
+    main.querySelectorAll("[data-step]").forEach(b => b.addEventListener("click", () => {
+      const v = Math.max(0, Math.round(dist(state.range)) + Number(b.dataset.step));
+      r.value = String(v); state.range = v * du(); save(); onRange();
+    }));
+  }
+}
+
+// ---------- Solve ----------
+function renderSolve() {
+  const yd = state.yards;
+  main.innerHTML = `
+    ${rifleSelect()}
+    <section class="readout" id="readout" aria-live="polite"></section>
+    ${rangeStepper()}
+    ${unitsPanel()}
+    <h2>Target</h2>
+    <div class="panel">
+      ${field("angle", "Shot angle", r1(state.angle), { unit: "°", signed: true, hint: "+ uphill, − downhill" })}
+      ${field("tspeed", "Target speed", r1(state.targetSpeed), { unit: "m/s", signed: true, hint: "+ moving right" })}
+    </div>
+    <h2>Wind</h2>
+    <div class="panel">
+      ${field("wspeed", "Wind speed", r1(state.windSpeed), { unit: "m/s" })}
+      ${field("wclock", "Wind from", r1(state.windClock), { unit: "o'clock", hint: "12 = from target, 3 = from right" })}
+    </div>
+    <h2>Atmosphere</h2>
+    <div class="panel">
+      ${field("temp", "Temperature", r1(state.temp), { unit: "°C", signed: true })}
+      ${field("hum", "Humidity", r1(state.humidity), { unit: "%" })}
+      ${segRow("Air pressure from", "useAlt", [[0, "Barometer"], [1, "Altitude"]], state.useAlt ? 1 : 0)}
+      <div id="pressRow">${field("press", "Station pressure", r1(state.pressure), { unit: "hPa" })}</div>
+      <div id="altRow">${field("alt", "Altitude", r1(state.altitude / (yd ? FT : 1)), { unit: yd ? "ft" : "m", signed: true })}</div>
+    </div>
+    <h2>Coriolis</h2>
+    <div class="panel">
+      ${segRow("Coriolis / Eötvös", "coriolis", [[0, "Off"], [1, "On"]], state.coriolis ? 1 : 0)}
+      <div id="corRows">
+        ${field("lat", "Latitude", r1(state.latitude), { unit: "°", signed: true, hint: "South is negative (NZ ≈ −41)" })}
+        ${field("az", "Direction of fire", r1(state.azimuth), { unit: "° true" })}
+      </div>
+    </div>`;
+  const sync = () => {
+    document.getElementById("pressRow").hidden = state.useAlt;
+    document.getElementById("altRow").hidden = !state.useAlt;
+    document.getElementById("corRows").hidden = !state.coriolis;
+  };
+  sync();
+  bindCommon(renderSolve, updateReadout);
+  bindState("angle", "angle", 1, updateReadout);
+  bindState("tspeed", "targetSpeed", 1, updateReadout);
+  bindState("wspeed", "windSpeed", 1, updateReadout);
+  bindState("wclock", "windClock", 1, updateReadout);
+  bindState("temp", "temp", 1, updateReadout);
+  bindState("hum", "humidity", 1, updateReadout);
+  bindState("press", "pressure", 1, updateReadout);
+  bindState("alt", "altitude", yd ? FT : 1, updateReadout);
+  bindState("lat", "latitude", 1, updateReadout);
+  bindState("az", "azimuth", 1, updateReadout);
+  main.querySelectorAll('[data-seg="useAlt"],[data-seg="coriolis"]').forEach(b => b.addEventListener("click", () => {
+    state[b.dataset.seg] = b.dataset.val === "1"; save();
+    b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    sync(); updateReadout();
+  }));
+  bindNegs(main);
+  updateReadout();
+}
+
+function updateReadout() {
+  const box = document.getElementById("readout");
+  if (!box) return;
+  const p = selected(), s = shot(), sv = makeSolver(p), pt = sv.solve(s, [state.range])[0];
+  if (!pt) { box.innerHTML = `<div class="oor">Out of range for this load</div>`; return; }
+  const u = corrName(p), w = pt.windMil + pt.leadMil, sg = sv.stability(s);
+  const ec = Math.abs(clicks(p, pt.elevMil)), wc = Math.abs(clicks(p, w));
+  box.innerHTML = `
+    <div class="corr elev"><span class="dir">${pt.elevMil >= 0 ? "UP" : "DOWN"}</span>
+      <span class="val">${f2(Math.abs(corr(p, pt.elevMil)))}<small>${u}</small></span><span class="clk">${ec} clicks</span></div>
+    <div class="corr wind"><span class="dir">${w >= 0 ? "RIGHT" : "LEFT"}</span>
+      <span class="val">${f2(Math.abs(corr(p, w)))}<small>${u}</small></span><span class="clk">${wc} clicks</span></div>
+    <dl class="facts">
+      <div><dt>Velocity</dt><dd>${f0(pt.v / FT)} fps</dd></div>
+      <div><dt>Mach</dt><dd>${f2(pt.mach)}</dd></div>
+      <div><dt>Energy</dt><dd>${energy(pt.energy)}</dd></div>
+      <div><dt>Time of flight</dt><dd>${f2(pt.tof)} s</dd></div>
+      <div><dt>Drop</dt><dd>${small(-pt.y)}</dd></div>
+      <div><dt>Drift</dt><dd>${small(pt.z)}</dd></div>
+      <div><dt>Spin drift</dt><dd>${small(pt.spin)}</dd></div>
+      <div><dt>Lead</dt><dd>${f2(Math.abs(corr(p, pt.leadMil)))} ${u}</dd></div>
+      <div><dt>Muzzle vel.</dt><dd>${f0(sv.mvAt(s.temp) / FT)} fps</dd></div>
+      <div><dt>Air density</dt><dd>${f3(density(s.temp, s.pressure, s.humidity))}</dd></div>
+      <div><dt>Stability Sg</dt><dd class="${sg > 0 && sg < 1.3 ? "warn" : ""}">${sg > 0 ? f2(sg) + (sg < 1.3 ? " low" : "") : "–"}</dd></div>
+      <div><dt>Zero</dt><dd>${zeroText(p)}</dd></div>
+    </dl>`;
+}
+
+// ---------- Table ----------
+function renderTable() {
+  main.innerHTML = `
+    ${rifleSelect()}
+    ${unitsPanel()}
+    <div class="panel">
+      ${field("ts", "Start", r1(dist(state.tStart)), { unit: dName() })}
+      ${field("te", "End", r1(dist(state.tEnd)), { unit: dName() })}
+      ${field("tp", "Step", r1(dist(state.tStep)), { unit: dName() })}
+    </div>
+    <p class="note">Uses the wind and atmosphere from the Solve tab. Greyed rows are below Mach 1.2, where accuracy drops.</p>
+    <div class="tablebox"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>`;
+  bindCommon(renderTable, fillTable);
+  bindState("ts", "tStart", du(), fillTable);
+  bindState("te", "tEnd", du(), fillTable);
+  bindState("tp", "tStep", du(), fillTable);
+  fillTable();
+}
+function fillTable() {
+  const p = selected(), u = corrName(p);
+  const start = Math.max(0, state.tStart), end = Math.min(3000, state.tEnd), step = Math.max(5, state.tStep);
+  const ranges = [];
+  for (let r = start; r <= end + 1e-9 && ranges.length < 300; r += step) ranges.push(r);
+  const pts = makeSolver(p).solve(shot(), ranges);
+  document.getElementById("thead").innerHTML =
+    `<tr><th>${dName()}</th><th>Elev ${u}</th><th>Clk</th><th>Wind ${u}</th><th>Clk</th><th>fps</th><th>${state.yards ? "ft·lb" : "J"}</th><th>s</th></tr>`;
+  document.getElementById("tbody").innerHTML = pts.filter(Boolean).map(pt => {
+    const w = pt.windMil + pt.leadMil;
+    return `<tr class="${pt.mach < 1.2 ? "trans" : ""}"><td>${f0(dist(pt.range))}</td><td>${f2(corr(p, pt.elevMil))}</td><td>${clicks(p, pt.elevMil)}</td>
+      <td>${lr(corr(p, w))}</td><td>${lr(clicks(p, w), 0)}</td><td>${f0(pt.v / FT)}</td><td>${f0(state.yards ? pt.energy * FTLB : pt.energy)}</td><td>${f2(pt.tof)}</td></tr>`;
+  }).join("") || `<tr><td colspan="8" style="text-align:left">No ranges to show. Check start, end and step.</td></tr>`;
+}
+
+// ---------- Reticle ----------
+function renderReticle() {
+  main.innerHTML = `
+    ${rifleSelect()}
+    ${rangeStepper()}
+    <p class="hold" id="hold"></p>
+    <canvas class="scope" id="scope" aria-label="Reticle with hold points"></canvas>
+    <p class="note">Red dot: where to hold at the current range. Blue dots: holds every 100 ${dName()} with the current wind.</p>
+    ${unitsPanel()}`;
+  bindCommon(renderReticle, drawReticle);
+  drawReticle();
+}
+function drawReticle() {
+  const cv = document.getElementById("scope");
+  if (!cv) return;
+  const p = selected(), moa = corrMoa(p), range = state.range;
+  const ranges = Array.from({ length: 15 }, (_, i) => (i + 1) * 100 * du()).filter(r => Math.abs(r - range) > 0.01).concat([range]).sort((a, b) => a - b);
+  const pts = makeSolver(p).solve(shot(), ranges).filter(Boolean);
+  const cur = pts.find(pt => Math.abs(pt.range - range) < 0.01);
+  const holdEl = document.getElementById("hold");
+  if (cur) {
+    const w = corr(p, cur.windMil + cur.leadMil);
+    holdEl.textContent = `${f0(dist(range))} ${dName()}: hold ${f1(Math.abs(corr(p, cur.elevMil)))} ${corrName(p)} ${cur.elevMil >= 0 ? "high" : "low"}, ${f1(Math.abs(w))} ${w >= 0 ? "right" : "left"}`;
+  } else holdEl.textContent = "Out of range for this load";
+  const holds = pts.filter(pt => pt === cur || pt.elevMil > 0)
+    .map(pt => ({ label: f0(dist(pt.range)), e: corr(p, pt.elevMil), w: corr(p, pt.windMil + pt.leadMil), main: pt === cur }));
+
+  const css = cv.clientWidth || 320, dpr = window.devicePixelRatio || 1;
+  cv.width = css * dpr; cv.height = css * dpr;
+  const g = cv.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const cx = css / 2, cy = css / 2, ringW = 7, r = css / 2 - ringW;
+  g.clearRect(0, 0, css, css);
+  // Glass and reticle are drawn as they look through a scope, so they keep fixed colours in both themes.
+  g.fillStyle = "#dfe4e7"; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+  g.save(); g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.clip();
+  const step = moa ? 2 : 1;
+  let half = moa ? 30 : 10;
+  const maxHold = holds.reduce((m, h) => Math.max(m, Math.abs(h.e), Math.abs(h.w)), 0);
+  while (maxHold > half * 0.9) half *= 1.5;
+  const ppu = r / half;
+  g.strokeStyle = "#101214"; g.lineWidth = 1.2;
+  g.beginPath(); g.moveTo(cx - r, cy); g.lineTo(cx + r, cy); g.moveTo(cx, cy - r); g.lineTo(cx, cy + r); g.stroke();
+  g.fillStyle = "#101214"; g.font = "10px " + getComputedStyle(document.body).getPropertyValue("--num");
+  const big = 7, sm = 4, every = moa ? 10 : 2;
+  for (let i = 1; i <= Math.floor(half / step); i++) {
+    const d = i * step * ppu, h = (i - 0.5) * step * ppu;
+    g.beginPath();
+    for (const s of [-1, 1]) {
+      g.moveTo(cx + s * d, cy - big); g.lineTo(cx + s * d, cy + big);
+      g.moveTo(cx - big, cy + s * d); g.lineTo(cx + big, cy + s * d);
+      g.moveTo(cx + s * h, cy - sm); g.lineTo(cx + s * h, cy + sm);
+      g.moveTo(cx - sm, cy + s * h); g.lineTo(cx + sm, cy + s * h);
+    }
+    g.stroke();
+    const v = i * step;
+    if (v % every === 0) {
+      g.fillText(String(v), cx + big + 3, cy + d + 3.5);
+      g.fillText(String(v), cx + d - g.measureText(String(v)).width / 2, cy + big + 12);
+    }
+  }
+  // The reticle point to put on the target sits opposite the correction.
+  g.font = "bold 10px " + getComputedStyle(document.body).getPropertyValue("--num");
+  for (const hd of holds.filter(h => !h.main)) {
+    const x = cx - hd.w * ppu, y = cy + hd.e * ppu;
+    g.fillStyle = "#1d6fe0"; g.beginPath(); g.arc(x, y, 3.2, 0, Math.PI * 2); g.fill();
+    g.fillText(hd.label, x + 6, y + 3.5);
+  }
+  const m = holds.find(h => h.main);
+  if (m) { g.fillStyle = "#e5281e"; g.beginPath(); g.arc(cx - m.w * ppu, cy + m.e * ppu, 6.5, 0, Math.PI * 2); g.fill(); }
+  g.restore();
+  g.strokeStyle = "#15181a"; g.lineWidth = ringW; g.beginPath(); g.arc(cx, cy, r + ringW / 2, 0, Math.PI * 2); g.stroke();
+  g.fillStyle = "#6c757c"; g.font = "11px " + getComputedStyle(document.body).getPropertyValue("--body");
+  g.fillText(moa ? "MOA" : "MIL", 10, css - 10);
+}
+
+// ---------- Rifles ----------
+let editing = null;      // { draft, isNew }
+let armedDelete = null;  // profile id awaiting a second tap
+function renderRifles() {
+  if (editing) return renderEditor();
+  main.innerHTML = `
+    <h2>Rifle profiles</h2>
+    ${state.profiles.map(p => `
+      <article class="rifle${p.id === selected().id ? " sel" : ""}">
+        <h3>${esc(p.name)}${p.id === selected().id ? '<span class="tag">In use</span>' : ""}</h3>
+        <p>${p.bulletGr} gr · ${p.model} ${f3(p.bc)} · ${f0(p.mv / FT)} fps · zero ${zeroText(p)} · ${p.clickValue} ${p.clickUnit}/click</p>
+        <div class="btns">
+          <button type="button" data-act="use" data-id="${p.id}">Use</button>
+          <button type="button" data-act="edit" data-id="${p.id}">Edit</button>
+          <button type="button" data-act="copy" data-id="${p.id}">Copy</button>
+          <button type="button" class="danger" data-act="del" data-id="${p.id}" ${state.profiles.length === 1 ? "disabled" : ""}>${armedDelete === p.id ? "Tap to confirm" : "Delete"}</button>
+        </div>
+      </article>`).join("")}
+    <div class="btns">
+      <button type="button" class="primary" id="addFactory">Add from factory ammo</button>
+      <button type="button" id="addOwn">Add with your own data</button>
+    </div>
+    <p class="note">Example profiles are starting points. Enter your own chronographed velocity and the maker's BC, then confirm drops on paper at distance. Profiles are saved on this device only.</p>`;
+  main.querySelectorAll("[data-act]").forEach(b => b.addEventListener("click", () => {
+    const id = Number(b.dataset.id), p = state.profiles.find(x => x.id === id);
+    const act = b.dataset.act;
+    if (act !== "del") armedDelete = null;
+    if (act === "use") { state.selected = id; save(); show("solve"); return; }
+    if (act === "edit") { editing = { draft: { ...p }, isNew: false }; renderRifles(); return; }
+    if (act === "copy") { state.profiles.push({ ...p, id: Date.now(), name: p.name + " (copy)" }); save(); renderRifles(); return; }
+    if (act === "del") {
+      if (armedDelete !== id) { armedDelete = id; renderRifles(); return; }
+      state.profiles = state.profiles.filter(x => x.id !== id); armedDelete = null;
+      if (state.selected === id) state.selected = state.profiles[0].id;
+      save(); renderRifles();
+    }
+  }));
+  document.getElementById("addOwn").addEventListener("click", () => { editing = { draft: newProfile(), isNew: true }; renderRifles(); });
+  document.getElementById("addFactory").addEventListener("click", () => openPicker(a => {
+    editing = { draft: applyAmmo(newProfile(), a, true), isNew: true }; renderRifles();
+  }));
+}
+function newProfile() {
+  return { ...DEFAULT_PROFILES[0], id: Date.now(), name: "New rifle", zeroYards: state.yards, zeroM: 100 * du(), bulletLenMm: 0 };
+}
+function applyAmmo(d, a, rename) {
+  Object.assign(d, { caliberMm: a.dia, bulletGr: a.gr, bulletLenMm: a.len, bc: a.bc, model: a.model, mv: a.mv });
+  if (rename) d.name = `${a.cal} ${ammoLabel(a)}`;
+  return d;
+}
+
+const EDIT_FIELDS = [
+  // [id, label, get, set, unit, signed]
+  ["e_cal", "Caliber", d => d.caliberMm, (d, v) => d.caliberMm = v, "mm"],
+  ["e_gr", "Bullet weight", d => d.bulletGr, (d, v) => d.bulletGr = v, "gr"],
+  ["e_len", "Bullet length", d => d.bulletLenMm, (d, v) => d.bulletLenMm = v, "mm"],
+  ["e_bc", "Ballistic coefficient", d => d.bc, (d, v) => d.bc = v, ""],
+  ["e_mv", "Muzzle velocity", d => Math.round(d.mv / FT), (d, v) => d.mv = v * FT, "fps"],
+  ["e_mvt", "MV measured at", d => d.mvTempC, (d, v) => d.mvTempC = v, "°C", true],
+  ["e_sens", "Temp sensitivity", d => Math.round(d.mvSens / FT * 10) / 10, (d, v) => d.mvSens = v * FT, "fps/°C", true],
+  ["e_tw", "Barrel twist (1 in …)", d => d.twistIn, (d, v) => d.twistIn = v, "in"],
+  ["e_sh", "Sight height", d => d.sightHeightMm, (d, v) => d.sightHeightMm = v, "mm"],
+  ["e_click", "Click value", d => d.clickValue, (d, v) => d.clickValue = v, ""],
+  ["e_zero", "Zero distance", d => Math.round(d.zeroM / (d.zeroYards ? YD : 1) * 10) / 10, (d, v) => d.zeroM = v * (d.zeroYards ? YD : 1), ""],
+  ["e_zt", "Zero temperature", d => d.zeroTempC, (d, v) => d.zeroTempC = v, "°C", true],
+  ["e_zp", "Zero pressure", d => d.zeroPressureHpa, (d, v) => d.zeroPressureHpa = v, "hPa"],
+];
+function renderEditor() {
+  const d = editing.draft;
+  const F = id => { const f = EDIT_FIELDS.find(x => x[0] === id); return field(f[0], f[1], r1(f[2](d)).replace(/^NaN$/, ""), { unit: id === "e_zero" ? (d.zeroYards ? "yd" : "m") : f[4], signed: !!f[5] }); };
+  main.innerHTML = `
+    <h2>${editing.isNew ? "New rifle" : "Edit rifle"}</h2>
+    <div class="panel"><div class="row"><label for="e_name">Name</label></div>
+      <div style="padding-bottom:12px"><input type="text" class="wide" id="e_name" value="${esc(d.name)}" autocomplete="off"></div></div>
+    <button type="button" id="fillFactory">Fill bullet and velocity from factory ammo</button>
+    <h2>Bullet</h2>
+    <div class="panel">${F("e_cal")}${F("e_gr")}${F("e_len")}${F("e_bc")}${segRow("Drag model", "e_model", [["G1", "G1"], ["G7", "G7"]], d.model)}</div>
+    <h2>Velocity</h2>
+    <div class="panel">${F("e_mv")}${F("e_mvt")}${F("e_sens")}</div>
+    <h2>Rifle and scope</h2>
+    <div class="panel">${F("e_tw")}${segRow("Twist direction", "e_twist", [[1, "Right"], [0, "Left"]], d.rightTwist ? 1 : 0)}${F("e_sh")}
+      ${segRow("Scope unit", "e_unit", [["MIL", "MIL"], ["MOA", "MOA"]], d.clickUnit)}${F("e_click")}</div>
+    <h2>Zero</h2>
+    <div class="panel">${segRow("Zero distance in", "e_zu", [[0, "Metres"], [1, "Yards"]], d.zeroYards ? 1 : 0)}${F("e_zero")}${F("e_zt")}${F("e_zp")}</div>
+    <p class="note">Factory figures are the maker's published BC and box velocity. Check them against your box. A bullet length of 0 means unknown; measure a bullet and enter it to get stability and spin drift.</p>
+    <p class="note warn" id="e_err" hidden></p>
+    <div class="btns"><button type="button" class="primary" id="e_save">Save rifle</button><button type="button" id="e_cancel">Cancel</button></div>`;
+  const readAll = () => {
+    d.name = document.getElementById("e_name").value.trim() || "Rifle";
+    const bad = [];
+    for (const f of EDIT_FIELDS) { const v = num(document.getElementById(f[0]).value); if (v === null) bad.push(f[1]); else f[3](d, v); }
+    return bad;
+  };
+  main.querySelectorAll("[data-seg]").forEach(b => b.addEventListener("click", () => {
+    readAll();
+    const v = b.dataset.val;
+    if (b.dataset.seg === "e_model") d.model = v;
+    if (b.dataset.seg === "e_twist") d.rightTwist = v === "1";
+    if (b.dataset.seg === "e_unit") d.clickUnit = v;
+    if (b.dataset.seg === "e_zu") d.zeroYards = v === "1";
+    renderEditor();
+  }));
+  bindNegs(main);
+  document.getElementById("fillFactory").addEventListener("click", () => {
+    readAll();
+    openPicker(a => { applyAmmo(d, a, d.name === "New rifle" || !d.name); renderEditor(); });
+  });
+  document.getElementById("e_cancel").addEventListener("click", () => { editing = null; renderRifles(); });
+  document.getElementById("e_save").addEventListener("click", () => {
+    const bad = readAll(), err = document.getElementById("e_err");
+    if (bad.length || !(d.bc > 0) || !(d.mv > 0)) {
+      err.hidden = false;
+      err.textContent = bad.length ? `Enter a number for: ${bad.join(", ")}.` : "Ballistic coefficient and muzzle velocity must be greater than 0.";
+      return;
+    }
+    if (editing.isNew) { state.profiles.push(d); state.selected = d.id; }
+    else state.profiles = state.profiles.map(p => p.id === d.id ? d : p);
+    save(); editing = null; renderRifles();
+  });
+}
+
+// ---------- Factory ammo picker ----------
+function openPicker(onPick) {
+  const sheet = document.getElementById("sheet");
+  sheet.innerHTML = `<div class="sheet" id="sheetBg"><div class="box" role="dialog" aria-modal="true" aria-label="Factory ammo">
+    <div class="head"><h2>Factory ammo · ${AMMO.length} loads</h2><button type="button" class="ghost" id="pClose">Close</button></div>
+    <select id="pCal" class="wide"><option value="">All calibers</option>${CALIBERS.map(c => `<option>${esc(c)}</option>`).join("")}</select>
+    <input type="text" class="wide" id="pQ" placeholder="Search, e.g. 150 SST or Precision Hunter" autocomplete="off">
+    <div class="list" id="pList"></div></div></div>`;
+  const list = document.getElementById("pList"), cal = document.getElementById("pCal"), q = document.getElementById("pQ");
+  const close = () => { sheet.innerHTML = ""; };
+  const draw = () => {
+    const words = q.value.toLowerCase().split(/\s+/).filter(Boolean);
+    const hits = AMMO.filter(a => (!cal.value || a.cal === cal.value) &&
+      words.every(w => `${a.cal} ${a.brand} ${a.bullet} ${a.gr}gr ${a.gr} ${a.item}`.toLowerCase().includes(w)));
+    list.innerHTML = hits.slice(0, 120).map(a => `<button type="button" class="load" data-i="${AMMO.indexOf(a)}">${esc(ammoLabel(a))}
+      <span>${esc(a.cal)} · ${a.model} ${f3(a.bc)} · ${f0(a.mv / FT)} fps${a.item ? " · #" + a.item : ""}</span></button>`).join("")
+      + (hits.length > 120 ? `<p class="note">${hits.length - 120} more. Pick a caliber or refine the search.</p>` : "")
+      + (hits.length ? "" : `<p class="note">No loads match. Try fewer words.</p>`);
+  };
+  cal.addEventListener("change", draw);
+  q.addEventListener("input", draw);
+  list.addEventListener("click", e => { const b = e.target.closest("[data-i]"); if (b) { close(); onPick(AMMO[Number(b.dataset.i)]); } });
+  document.getElementById("pClose").addEventListener("click", close);
+  document.getElementById("sheetBg").addEventListener("click", e => { if (e.target.id === "sheetBg") close(); });
+  const cur = selected();
+  const guess = AMMO.find(a => Math.abs(a.dia - cur.caliberMm) < 0.02);
+  if (guess) cal.value = guess.cal;
+  draw();
+}
+
+// ---------- Tabs ----------
+const VIEWS = { solve: renderSolve, table: renderTable, reticle: renderReticle, rifles: renderRifles };
+function show(tab) {
+  if (!VIEWS[tab]) tab = "solve";
+  state.tab = tab; save();
+  if (tab !== "rifles") { editing = null; armedDelete = null; }
+  document.querySelectorAll("nav.tabs button").forEach(b => { if (b.dataset.tab === tab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
+  VIEWS[tab]();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => show(b.dataset.tab)));
+window.addEventListener("resize", () => { if (state.tab === "reticle") drawReticle(); });
+show(state.tab);
+</script>
+
+<script>
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
