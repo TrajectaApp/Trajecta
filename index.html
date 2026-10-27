@@ -20,7 +20,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
 /* Layout: one-column field instrument. The correction readout dominates the top; inputs sit in grouped
-   panels below; a fixed bottom tab bar switches Solve / Table / Reticle / Rifles. Dark-first for low light,
+   panels below; a fixed bottom tab bar switches Solve / Table / MPBR / Rifles. Dark-first for low light,
    with a high-contrast light palette for bright sun. */
 :root {
   --bg: #0e1113;
@@ -136,9 +136,10 @@ th { position: sticky; top: 0; background: var(--raise); color: var(--accent); f
 tbody tr:nth-child(even) { background: var(--raise); }
 tr.trans td { color: var(--muted); }
 
-/* Reticle */
-.scope { width: 100%; max-width: 100%; aspect-ratio: 1; display: block; }
-.hold { font: 600 18px var(--num); color: var(--accent); margin: 0; }
+/* MPBR */
+.chart { width: 100%; max-width: 100%; aspect-ratio: 1 / 0.72; display: block; border: 1px solid var(--line); border-radius: 10px; }
+.mz { font: 600 30px/1.1 var(--num); color: var(--accent); }
+.mp { font: 600 20px/1.2 var(--num); }
 
 /* Rifles */
 .rifle { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 8px; }
@@ -180,7 +181,7 @@ nav.tabs button[aria-current="page"] { color: var(--accent); box-shadow: inset 0
 <nav class="tabs" aria-label="Sections">
   <button data-tab="solve">Solve</button>
   <button data-tab="table">Table</button>
-  <button data-tab="reticle">Reticle</button>
+  <button data-tab="mpbr">MPBR</button>
   <button data-tab="rifles">Rifles</button>
 </nav>
 <div id="sheet"></div>
@@ -292,8 +293,10 @@ function makeSolver(p) {
     return sg;
   }
 
-  function solve(s, ranges) {
-    const raw = integrate(boreAngle(), s, mvAt(s.temp), ranges);
+  const solve = (s, ranges) => solveWithBore(boreAngle(), s, ranges);
+  // Like solve, but with the bore at `bore` radians above the line of sight instead of the zeroed angle.
+  function solveWithBore(bore, s, ranges) {
+    const raw = integrate(bore, s, mvAt(s.temp), ranges);
     const sg = stability(s), c = speedOfSound(s.temp), dir = p.rightTwist ? 1 : -1;
     return raw.map(r => {
       if (!r) return null;
@@ -308,7 +311,41 @@ function makeSolver(p) {
       };
     });
   }
-  return { solve, stability, mvAt };
+  return { solve, solveWithBore, stability, mvAt };
+}
+
+// ---------- Maximum point blank range ----------
+// The zero that keeps the bullet within ±group/2 of the aim point for the longest distance.
+// Flat shot, no wind. Distances in metres (heights sampled every metre), heights in metres.
+function computeMpbr(p, s, groupIn) {
+  if (!(groupIn > 0)) return null;
+  const h = groupIn * INCH / 2, sv = makeSolver(p);
+  const flat = { ...s, angle: 0, windSpeed: 0, targetSpeed: 0, coriolis: false };
+  const ranges = Array.from({ length: 1501 }, (_, i) => i);
+  const path = b => sv.solveWithBore(b, flat, ranges).map(pt => pt ? pt.y : NaN);
+  const peak = y => y.reduce((m, v) => Number.isNaN(v) ? m : Math.max(m, v), -Infinity);
+  // Peak height rises with bore angle, so bisect for the angle whose peak is exactly +h.
+  let lo = 0, hi = 0.03;
+  if (peak(path(hi)) < h) return null;
+  for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (peak(path(mid)) < h) lo = mid; else hi = mid; }
+  const y = path((lo + hi) / 2);
+  let last = y.length - 1;
+  while (last >= 0 && Number.isNaN(y[last])) last--;
+  if (last < 2) return null;
+  let ip = 0;
+  for (let i = 0; i <= last; i++) if (y[i] > y[ip]) ip = i;
+  const cross = (from, to, level, rising) => {
+    for (let i = Math.max(from, 1); i <= to; i++) {
+      const a = y[i - 1], b = y[i];
+      if (rising ? (a < level && b >= level) : (a > level && b <= level)) return (i - 1) + (level - a) / (b - a);
+    }
+    return NaN;
+  };
+  return {
+    h, peak: ip, heights: y.slice(0, last + 1),
+    nearZero: cross(1, ip, 0, true), farZero: cross(ip + 1, last, 0, false),
+    mpbr: cross(ip + 1, last, -h, false), enters: y[0] >= -h ? 0 : cross(1, ip, -h, true),
+  };
 }
 
 // ---------- Factory ammo ----------
@@ -682,7 +719,7 @@ const DEFAULT_PROFILES = [
 const DEFAULTS = {
   tab: "solve", selected: 1, range: 300, angle: 0, windSpeed: 3, windClock: 3, targetSpeed: 0,
   temp: 15, pressure: 1013.25, humidity: 50, useAlt: false, altitude: 0, coriolis: false, latitude: -41, azimuth: 0,
-  tStart: 100, tEnd: 1000, tStep: 50, yards: false, corr: 0,
+  tStart: 100, tEnd: 1000, tStep: 50, yards: false, corr: 0, mpbrGroup: 4,
 };
 const KEY = "trajecta.v1";
 let state;
@@ -744,9 +781,9 @@ function rifleSelect() {
   return `<div class="panel"><div class="row"><label for="rifle">Rifle</label>
     <select id="rifle">${state.profiles.map(p => `<option value="${p.id}"${p.id === selected().id ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</select></div></div>`;
 }
-function unitsPanel() {
+function unitsPanel(showCorr = true) {
   return `<div class="panel">${segRow("Distance", "yards", [[0, "Metres"], [1, "Yards"]], state.yards ? 1 : 0)}
-    ${segRow("Corrections", "corr", [[0, `Scope (${selected().clickUnit})`], [1, "MIL"], [2, "MOA"]], state.corr)}</div>`;
+    ${showCorr ? segRow("Corrections", "corr", [[0, `Scope (${selected().clickUnit})`], [1, "MIL"], [2, "MOA"]], state.corr) : ""}</div>`;
 }
 function rangeStepper() {
   return `<div class="stepper">
@@ -892,80 +929,133 @@ function fillTable() {
   }).join("") || `<tr><td colspan="8" style="text-align:left">No ranges to show. Check start, end and step.</td></tr>`;
 }
 
-// ---------- Reticle ----------
-function renderReticle() {
+// ---------- MPBR ----------
+let lastMpbr = null;
+function renderMpbr() {
   main.innerHTML = `
     ${rifleSelect()}
-    ${rangeStepper()}
-    <p class="hold" id="hold"></p>
-    <canvas class="scope" id="scope" aria-label="Reticle with hold points"></canvas>
-    <p class="note">Red dot: where to hold at the current range. Blue dots: holds every 100 ${dName()} with the current wind.</p>
-    ${unitsPanel()}`;
-  bindCommon(renderReticle, drawReticle);
-  drawReticle();
+    ${unitsPanel(false)}
+    <h2>Group size</h2>
+    <div class="panel">${field("grp", "Group / vital zone", r1(state.mpbrGroup), { unit: "in", hint: "e.g. 4 = ±2 in of your aim" })}</div>
+    <section class="readout" id="mres" aria-live="polite"></section>
+    <canvas class="chart" id="mchart" aria-label="Bullet path against the point of aim"></canvas>
+    <p class="note">Orange line: bullet path. Dashed line: point of aim. Shaded band: your group size, centred on the point of aim.</p>
+    <button type="button" class="primary" id="mset">Set this as the rifle's zero</button>
+    <p class="note" id="mmsg" hidden></p>`;
+  bindCommon(renderMpbr, updateMpbr);
+  bindState("grp", "mpbrGroup", 1, updateMpbr);
+  document.getElementById("mset").addEventListener("click", () => {
+    const m = lastMpbr;
+    if (!m) return;
+    const p = selected(), s = shot();
+    p.zeroYards = state.yards;
+    p.zeroM = Math.round(dist(m.farZero)) * du();
+    p.zeroTempC = s.temp;
+    p.zeroPressureHpa = s.pressure;
+    save();
+    const msg = document.getElementById("mmsg");
+    msg.hidden = false;
+    msg.textContent = `${p.name} is now zeroed at ${zeroText(p)}. The Solve and Table tabs use this zero.`;
+  });
+  updateMpbr();
 }
-function drawReticle() {
-  const cv = document.getElementById("scope");
-  if (!cv) return;
-  const p = selected(), moa = corrMoa(p), range = state.range;
-  const ranges = Array.from({ length: 15 }, (_, i) => (i + 1) * 100 * du()).filter(r => Math.abs(r - range) > 0.01).concat([range]).sort((a, b) => a - b);
-  const pts = makeSolver(p).solve(shot(), ranges).filter(Boolean);
-  const cur = pts.find(pt => Math.abs(pt.range - range) < 0.01);
-  const holdEl = document.getElementById("hold");
-  if (cur) {
-    const w = corr(p, cur.windMil + cur.leadMil);
-    holdEl.textContent = `${f0(dist(range))} ${dName()}: hold ${f1(Math.abs(corr(p, cur.elevMil)))} ${corrName(p)} ${cur.elevMil >= 0 ? "high" : "low"}, ${f1(Math.abs(w))} ${w >= 0 ? "right" : "left"}`;
-  } else holdEl.textContent = "Out of range for this load";
-  const holds = pts.filter(pt => pt === cur || pt.elevMil > 0)
-    .map(pt => ({ label: f0(dist(pt.range)), e: corr(p, pt.elevMil), w: corr(p, pt.windMil + pt.leadMil), main: pt === cur }));
 
-  const css = cv.clientWidth || 320, dpr = window.devicePixelRatio || 1;
-  cv.width = css * dpr; cv.height = css * dpr;
+function updateMpbr() {
+  const box = document.getElementById("mres");
+  if (!box) return;
+  const p = selected(), group = state.mpbrGroup;
+  const m = computeMpbr(p, shot(), group);
+  const ok = m && !Number.isNaN(m.farZero) && !Number.isNaN(m.mpbr);
+  lastMpbr = ok ? m : null;
+  document.getElementById("mset").disabled = !ok;
+  if (!ok) {
+    box.innerHTML = `<div class="oor">No solution</div><p class="note">Enter a group size greater than 0. If it already is, this load may not reach that height within ${f0(dist(1500))} ${dName()}.</p>`;
+    drawMpbrChart(null);
+    return;
+  }
+  const half = group / 2, dn = dName();
+  const at100 = m.heights[Math.round(100 * du())];
+  box.innerHTML = `
+    <div class="mz">Zero at ${f0(dist(m.farZero))} ${dn}</div>
+    <div class="mp">Point blank to ${f0(dist(m.mpbr))} ${dn}</div>
+    <dl class="facts">
+      <div><dt>Aim dead on</dt><dd>${f0(dist(m.enters))}–${f0(dist(m.mpbr))} ${dn}</dd></div>
+      <div><dt>Stays within</dt><dd>±${r1(half)} in</dd></div>
+      <div><dt>Peak</dt><dd>+${r1(half)} in @ ${f0(dist(m.peak))} ${dn}</dd></div>
+      <div><dt>Crosses aim</dt><dd>${f0(dist(m.nearZero))} &amp; ${f0(dist(m.farZero))} ${dn}</dd></div>
+      ${at100 !== undefined ? `<div><dt>Sight-in at 100 ${dn}</dt><dd>${f1(Math.abs(at100 / INCH))} in ${at100 >= 0 ? "high" : "low"}</dd></div>` : ""}
+      <div><dt>Conditions</dt><dd>Solve tab air, flat, no wind</dd></div>
+    </dl>`;
+  drawMpbrChart(m);
+}
+
+function drawMpbrChart(m) {
+  const cv = document.getElementById("mchart");
+  if (!cv) return;
+  const W = cv.clientWidth || 320, H = Math.round(W * 0.72), dpr = window.devicePixelRatio || 1;
+  cv.width = W * dpr; cv.height = H * dpr;
   const g = cv.getContext("2d");
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const cx = css / 2, cy = css / 2, ringW = 7, r = css / 2 - ringW;
-  g.clearRect(0, 0, css, css);
-  // Glass and reticle are drawn as they look through a scope, so they keep fixed colours in both themes.
-  g.fillStyle = "#dfe4e7"; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
-  g.save(); g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.clip();
-  const step = moa ? 2 : 1;
-  let half = moa ? 30 : 10;
-  const maxHold = holds.reduce((m, h) => Math.max(m, Math.abs(h.e), Math.abs(h.w)), 0);
-  while (maxHold > half * 0.9) half *= 1.5;
-  const ppu = r / half;
-  g.strokeStyle = "#101214"; g.lineWidth = 1.2;
-  g.beginPath(); g.moveTo(cx - r, cy); g.lineTo(cx + r, cy); g.moveTo(cx, cy - r); g.lineTo(cx, cy + r); g.stroke();
-  g.fillStyle = "#101214"; g.font = "10px " + getComputedStyle(document.body).getPropertyValue("--num");
-  const big = 7, sm = 4, every = moa ? 10 : 2;
-  for (let i = 1; i <= Math.floor(half / step); i++) {
-    const d = i * step * ppu, h = (i - 0.5) * step * ppu;
-    g.beginPath();
-    for (const s of [-1, 1]) {
-      g.moveTo(cx + s * d, cy - big); g.lineTo(cx + s * d, cy + big);
-      g.moveTo(cx - big, cy + s * d); g.lineTo(cx + big, cy + s * d);
-      g.moveTo(cx + s * h, cy - sm); g.lineTo(cx + s * h, cy + sm);
-      g.moveTo(cx - sm, cy + s * h); g.lineTo(cx + sm, cy + s * h);
-    }
-    g.stroke();
-    const v = i * step;
-    if (v % every === 0) {
-      g.fillText(String(v), cx + big + 3, cy + d + 3.5);
-      g.fillText(String(v), cx + d - g.measureText(String(v)).width / 2, cy + big + 12);
-    }
+  const css = getComputedStyle(document.documentElement);
+  const tok = n => css.getPropertyValue(n).trim();
+  g.fillStyle = tok("--panel"); g.fillRect(0, 0, W, H);
+  if (!m) return;
+  const half = state.mpbrGroup / 2;
+  const end = Math.min(m.heights.length - 1, Math.floor(m.mpbr * 1.2 + 10));
+  const xs = [], ys = [];
+  for (let i = 0; i <= end; i++) { xs.push(dist(i)); ys.push(m.heights[i] / INCH); }
+  const xMax = xs[xs.length - 1];
+  const yTop = half * 2, yBot = Math.min(-half * 1.6, Math.max(Math.min(...ys), -half * 4));
+  const padL = 34, padR = 10, padT = 24, padB = 26;
+  const px = x => padL + x / xMax * (W - padL - padR);
+  const py = y => padT + (yTop - y) / (yTop - yBot) * (H - padT - padB);
+  const nice = raw => { const p10 = Math.pow(10, Math.floor(Math.log10(raw))), n = raw / p10; return p10 * (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10); };
+  const lbl = v => (Math.abs(v - Math.round(v)) < 1e-6 ? String(Math.round(v)) : v.toFixed(1));
+  const numFont = tok("--num") || "monospace";
+  g.font = `10.5px ${numFont}`;
+  g.lineWidth = 1;
+  // Grid and axis labels
+  const xs5 = nice(xMax / 5);
+  for (let x = 0; x <= xMax + 1e-9; x += xs5) {
+    g.strokeStyle = tok("--line"); g.beginPath(); g.moveTo(px(x), padT); g.lineTo(px(x), H - padB); g.stroke();
+    g.fillStyle = tok("--muted"); const t = lbl(x); g.fillText(t, px(x) - g.measureText(t).width / 2, H - padB + 14);
   }
-  // The reticle point to put on the target sits opposite the correction.
-  g.font = "bold 10px " + getComputedStyle(document.body).getPropertyValue("--num");
-  for (const hd of holds.filter(h => !h.main)) {
-    const x = cx - hd.w * ppu, y = cy + hd.e * ppu;
-    g.fillStyle = "#1d6fe0"; g.beginPath(); g.arc(x, y, 3.2, 0, Math.PI * 2); g.fill();
-    g.fillText(hd.label, x + 6, y + 3.5);
+  g.fillText(dName(), W - padR - g.measureText(dName()).width, H - 3);
+  const ys6 = nice((yTop - yBot) / 6);
+  for (let y = Math.ceil(yBot / ys6) * ys6; y <= yTop + 1e-9; y += ys6) {
+    g.strokeStyle = tok("--line"); g.beginPath(); g.moveTo(padL, py(y)); g.lineTo(W - padR, py(y)); g.stroke();
+    g.fillStyle = tok("--muted"); const t = (y > 0 ? "+" : "") + lbl(y); g.fillText(t, padL - 4 - g.measureText(t).width, py(y) + 4);
   }
-  const m = holds.find(h => h.main);
-  if (m) { g.fillStyle = "#e5281e"; g.beginPath(); g.arc(cx - m.w * ppu, cy + m.e * ppu, 6.5, 0, Math.PI * 2); g.fill(); }
-  g.restore();
-  g.strokeStyle = "#15181a"; g.lineWidth = ringW; g.beginPath(); g.arc(cx, cy, r + ringW / 2, 0, Math.PI * 2); g.stroke();
-  g.fillStyle = "#6c757c"; g.font = "11px " + getComputedStyle(document.body).getPropertyValue("--body");
-  g.fillText(moa ? "MOA" : "MIL", 10, css - 10);
+  g.fillText("in", 4, padT - 9);
+  // Group band, its edges and the point of aim
+  const accent = tok("--accent");
+  g.globalAlpha = 0.18; g.fillStyle = accent; g.fillRect(padL, py(half), W - padL - padR, py(-half) - py(half)); g.globalAlpha = 1;
+  g.setLineDash([6, 4]); g.strokeStyle = accent; g.lineWidth = 1.2;
+  for (const y of [half, -half]) { g.beginPath(); g.moveTo(padL, py(y)); g.lineTo(W - padR, py(y)); g.stroke(); }
+  g.setLineDash([3, 3]); g.strokeStyle = tok("--fg"); g.lineWidth = 1.5;
+  g.beginPath(); g.moveTo(padL, py(0)); g.lineTo(W - padR, py(0)); g.stroke();
+  g.setLineDash([]);
+  // Markers
+  g.font = `600 10.5px ${tok("--body") || "sans-serif"}`;
+  let lastRight = -1, row = 0;
+  for (const [x, name] of [[dist(m.peak), "Peak"], [dist(m.farZero), "Zero"], [dist(m.mpbr), "MPBR"]].sort((a, b) => a[0] - b[0])) {
+    if (!(x <= xMax)) continue;
+    g.strokeStyle = tok("--muted"); g.lineWidth = 1; g.beginPath(); g.moveTo(px(x), padT); g.lineTo(px(x), H - padB); g.stroke();
+    const tw = g.measureText(name).width, left = Math.min(Math.max(px(x) - tw / 2, 0), W - tw);
+    row = left < lastRight + 4 ? 1 - row : 0;
+    g.fillStyle = tok("--fg"); g.fillText(name, left, padT - 10 + row * 11);
+    lastRight = left + tw;
+  }
+  // Bullet path, clipped to the plot
+  g.save(); g.beginPath(); g.rect(padL, padT, W - padL - padR, H - padT - padB); g.clip();
+  g.strokeStyle = accent; g.lineWidth = 2.6; g.lineJoin = "round";
+  g.beginPath();
+  let started = false;
+  for (let i = 0; i < xs.length; i++) {
+    if (Number.isNaN(ys[i])) continue;
+    if (!started) { g.moveTo(px(xs[i]), py(ys[i])); started = true; } else g.lineTo(px(xs[i]), py(ys[i]));
+  }
+  g.stroke(); g.restore();
 }
 
 // ---------- Rifles ----------
@@ -1120,7 +1210,7 @@ function openPicker(onPick) {
 }
 
 // ---------- Tabs ----------
-const VIEWS = { solve: renderSolve, table: renderTable, reticle: renderReticle, rifles: renderRifles };
+const VIEWS = { solve: renderSolve, table: renderTable, mpbr: renderMpbr, rifles: renderRifles };
 function show(tab) {
   if (!VIEWS[tab]) tab = "solve";
   state.tab = tab; save();
@@ -1130,7 +1220,7 @@ function show(tab) {
   window.scrollTo(0, 0);
 }
 document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => show(b.dataset.tab)));
-window.addEventListener("resize", () => { if (state.tab === "reticle") drawReticle(); });
+window.addEventListener("resize", () => { if (state.tab === "mpbr") drawMpbrChart(lastMpbr); });
 show(state.tab);
 </script>
 
